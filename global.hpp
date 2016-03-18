@@ -27,7 +27,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#define MPI_ON
+//#define MPI_ON
 #ifdef MPI_ON
 #include "mpi.h"
 #endif // MPI_ON
@@ -104,7 +104,7 @@ enum TimeTypeIndex {
     // put two underscore at first to avoid possbile name conflict
     __total_elapse_time = 0,      /*!< total elapsed time */
     __waiting_time,               /*!< time for waiting, used when MPI is on */
-    __temporary_time,             /*!< calculate time for temporary purpose */
+    __tmp_used_timer,             /*!< calculate time for temporary purpose */
     __time_type_count             /*!< the number of time type */
 };
 

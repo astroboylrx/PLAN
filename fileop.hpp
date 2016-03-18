@@ -129,9 +129,9 @@ public:
      *  \brief print usage */
     void PrintUsage(const char *program_name);
     
-    /*! \fn void PrintStars(const OutputLevel &output_level)
+    /*! \fn void PrintStars(std::ostream &stream, const OutputLevel &output_level)
      *  \brief print 80 * symbols as a divider line */
-    void PrintStars(const OutputLevel &output_level);
+    void PrintStars(std::ostream &stream, const OutputLevel &output_level);
     
     /*! \fn void GenerateFilenames()
      *  \brief generate the name of data files for processing */

@@ -58,25 +58,25 @@ int IO_Operations::Initialize(int argc, const char * argv[])
         {0,0,0,0}
     };
     
-    log_info << "Verifying command-line-input arguments: " << std::endl;
+    log_info << "Verifying command-line-input arguments: \n";
     if (argc < 13) {
         PrintUsage(argv[0]);
     } else {
-        int temp_option;
+        int tmp_option;
         while (1) {
             // getopt_long stores the option
             int option_index = 0;
 #ifndef SMR_ON
             // remember add ":" after the letter means this option has argument after it
-            temp_option = getopt_long(argc, (char *const *)argv, "c:i:b:p:f:o:", long_options, &option_index);
+            tmp_option = getopt_long(argc, (char *const *)argv, "c:i:b:p:f:o:", long_options, &option_index);
 #else // SMR_ON
-            temp_option = getopt_long(argc, (char *const *)argv, "c:i:b:p:f:o:l:d:", long_options, &option_index);
+            tmp_option = getopt_long(argc, (char *const *)argv, "c:i:b:p:f:o:l:d:", long_options, &option_index);
 #endif // SMR_ON
-            if (temp_option == -1) {
+            if (tmp_option == -1) {
                 break;
             }
             
-            switch (temp_option) {
+            switch (tmp_option) {
                 case 0: {
                     // if this option set a flag, do nothing else now
                     if (long_options[option_index].flag != 0) {
@@ -86,47 +86,47 @@ int IO_Operations::Initialize(int argc, const char * argv[])
                     if (optarg) {
                         out_content << " with arg " << optarg;
                     }
-                    log_info << std::endl;
+                    log_info << "\n";
                     break;
                 }
                 case 'c': {
-                    std::istringstream temp_iss;
-                    temp_iss.str(optarg);
-                    temp_iss >> num_cpu;
-                    log_info << "num_cpu is " << num_cpu << std::endl;
+                    std::istringstream tmp_iss;
+                    tmp_iss.str(optarg);
+                    tmp_iss >> num_cpu;
+                    log_info << "num_cpu is " << num_cpu << "\n";
                     break;
                 }
                 case 'i': {
                     file_name.data_file_dir.assign(optarg);
-                    log_info << "data_file_dir is " << file_name.data_file_dir << std::endl;
+                    log_info << "data_file_dir is " << file_name.data_file_dir << "\n";
                     break;
                 }
                 case 'b': {
                     file_name.data_file_basename.assign(optarg);
-                    log_info << "data_file_basename is " << file_name.data_file_basename << std::endl;
+                    log_info << "data_file_basename is " << file_name.data_file_basename << "\n";
                     break;
                 }
                 case 'p': {
                     file_name.data_file_postname.assign(optarg);
-                    log_info << "data_file_postname is " << file_name.data_file_postname << std::endl;
+                    log_info << "data_file_postname is " << file_name.data_file_postname << "\n";
                     break;
                 }
                 case 'f': {
-                    std::string temp_str;
-                    temp_str.assign(optarg);
-                    size_t pos1 = temp_str.find_first_of(':');
-                    size_t pos2 = temp_str.find_last_of(':');
-                    std::istringstream temp_iss;
-                    char temp_char;
+                    std::string tmp_str;
+                    tmp_str.assign(optarg);
+                    size_t pos1 = tmp_str.find_first_of(':');
+                    size_t pos2 = tmp_str.find_last_of(':');
+                    std::istringstream tmp_iss;
+                    char tmp_char;
                     if (pos1 == pos2) {
-                        temp_iss.str(optarg);
-                        temp_iss >> start_num >> temp_char >> end_num;
+                        tmp_iss.str(optarg);
+                        tmp_iss >> start_num >> tmp_char >> end_num;
                         interval = 1;
                     } else {
-                        temp_iss.str(temp_str.substr(0, pos2));
-                        temp_iss >> start_num >> temp_char >> end_num;
-                        temp_iss.str(temp_str.substr(pos2+1));
-                        temp_iss >> interval;
+                        tmp_iss.str(tmp_str.substr(0, pos2));
+                        tmp_iss >> start_num >> tmp_char >> end_num;
+                        tmp_iss.str(tmp_str.substr(pos2+1));
+                        tmp_iss >> interval;
                     }
                     if (start_num < 0) {
                         error_message << "The start number should be positive (Auto fix to 0)" << std::endl;
@@ -144,23 +144,23 @@ int IO_Operations::Initialize(int argc, const char * argv[])
                         interval = 1;
                     }
                     num_file = (end_num - start_num) / interval + 1;
-                    log_info << "start_num = " << start_num << ", end_num = " << end_num << ", interval = " << interval << ", num_file = " << num_file << std::endl;
+                    log_info << "start_num = " << start_num << ", end_num = " << end_num << ", interval = " << interval << ", num_file = " << num_file << "\n";
                     break;
                 } // case 'f'
                 case 'o': {
                     file_name.output_file_path.assign(optarg);
-                    log_info << "output_file_path is " << file_name.output_file_path << std::endl;
+                    log_info << "output_file_path is " << file_name.output_file_path << "\n";
                     break;
                 }
 #ifdef SMR_ON
                 case 'l': {
                     file_name.data_level.assign(optarg);
-                    log_info << "data_level is " << file_name.data_level << std::endl;
+                    log_info << "data_level is " << file_name.data_level << "\n";
                     break;
                 }
                 case 'd': {
                     file_name.data_domain.assign(optarg);
-                    log_info << "data_domain is " << file_name.data_domain << std::endl;
+                    log_info << "data_domain is " << file_name.data_domain << "\n";
                     break;
                 }
 #endif // SMR_ON
@@ -171,19 +171,19 @@ int IO_Operations::Initialize(int argc, const char * argv[])
                         || optopt == 'l' || optopt == 'd'
 #endif // SMR_ON
                         ) {
-                        error_message << "Error: Option -" << optopt << " requires an arugment." << std::endl;
+                        error_message << "Error: Option -" << optopt << " requires an arugment.\n";
                         Output(std::cerr, error_message, __normal_output, __master_only);
                     } else if (isprint (optopt)) {
-                        error_message << "Error: Unknown option -" << optopt << std::endl;
+                        error_message << "Error: Unknown option -" << optopt << "\n";
                         Output(std::cerr, error_message, __normal_output, __master_only);
                     } else {
-                        error_message << "Error: Unknown option character " << optopt << std::endl;
+                        error_message << "Error: Unknown option character " << optopt << "\n";
                         Output(std::cerr, error_message, __normal_output, __master_only);
                     }
                     exit(2); // cannot execute
                 }
                 default: {
-                    error_message << temp_option << "\nError: Argument wrong." << std::endl;
+                    error_message << tmp_option << "\nError: Argument wrong.\n";
                     Output(std::cerr, error_message, __normal_output, __master_only);
                     exit(2); // cannot execute
                 }
@@ -194,13 +194,13 @@ int IO_Operations::Initialize(int argc, const char * argv[])
             ostream_level = __even_more_output;
         }
         Output(std::clog, log_info, __more_output, __master_only);
-        PrintStars(__more_output);
+        PrintStars(std::clog, __more_output);
         if (optind < argc) {
             log_info << "Non-option ARGV-elements: ";
             while (optind < argc) {
                 log_info << argv[optind++];
             }
-            log_info << std::endl;
+            log_info << "\n";
             Output(std::clog, log_info, __normal_output, __master_only);
         }
     } // if (argc < 13)
@@ -214,8 +214,7 @@ int IO_Operations::Initialize(int argc, const char * argv[])
  *  \brief print usage if required argument is missing */
 void IO_Operations::PrintUsage(const char *program_name)
 {
-    out_content << "USAGE: " << program_name << " -c <num_cpu> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [flags]" << std::endl;
-    out_content << "Example: ./plato -c 64 -i ./ -b Par_Strat3d -p ds -f 170:227 -o result.txt" << std::endl;
+    out_content << "USAGE: " << program_name << " -c <num_cpu> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [flags]\n" << "Example: ./plato -c 64 -i ./ -b Par_Strat3d -p ds -f 170:227 -o result.txt\n";
     Output(std::cout, out_content, __normal_output, __master_only);
     exit(2); // cannot execute
 }
@@ -247,12 +246,12 @@ void IO_Operations::Output(std::ostream &stream, std::ostringstream &content, co
     content.clear(); // clear error state if any
 }
 
-/*! \fn void PrintStars(const OutputLevel &output_level)
+/*! \fn void PrintStars(std::ostream &stream, const OutputLevel &output_level)
  *  \brief print 80 * symbols as a divider line */
-void IO_Operations::PrintStars(const OutputLevel &output_level)
+void IO_Operations::PrintStars(std::ostream &stream, const OutputLevel &output_level)
 {
-    out_content << std::setw(80) << std::setfill('*') << "*" << std::endl;
-    Output(std::cout, out_content, output_level, __master_only);
+    out_content << std::setw(80) << std::setfill('*') << "*\n";
+    Output(stream, out_content, output_level, __master_only);
 }
 
 /*! \fn void GenerateFilenames()
@@ -264,21 +263,21 @@ void IO_Operations::GenerateFilenames()
     }
     
     file_name.lis_data_file_name.reserve(num_file * num_cpu);
-    log_info << "Verifying generated data file names (only id0 and id[max]): " << std::endl;
+    log_info << "Verifying generated data file names (only id0 and id[max]):\n";
     
     for (int num = start_num; num <= end_num; num += interval) {
         std::stringstream formatted_num;
         formatted_num << std::setw(4) << std::setfill('0') << num;
         
         file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
-        log_info << file_name.lis_data_file_name.back() << std::endl;;
+        log_info << file_name.lis_data_file_name.back() << "\n";
         for (int id = 1; id <= num_cpu; id++) {
             file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"-id"+std::to_string(id)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
         }
-        log_info << file_name.lis_data_file_name.back() << std::endl;
+        log_info << file_name.lis_data_file_name.back() << "\n";
     }
     Output(std::clog, log_info, __even_more_output, __master_only);
-    PrintStars(__even_more_output);
+    PrintStars(std::clog, __even_more_output);
     
 }
 

@@ -35,13 +35,14 @@ int main(int argc, const char * argv[])
     mpi->Initialization(argc, argv);
 #endif // MPI_ON
     timer[__total_elapse_time].StartTimer();
-    io_ops->log_info << "Program begins now." << std::endl;
+    io_ops->log_info << "Program begins now.\n";
     io_ops->Output(std::clog, io_ops->log_info, io_ops->__normal_output, io_ops->__master_only);
-    io_ops->PrintStars(io_ops->__normal_output);
+    io_ops->PrintStars(std::clog, io_ops->__normal_output);
     io_ops->Initialize(argc, argv);
     
-    
-    
+    SmallVec<double, 3> test(2.5, 3.8, 4.1);
+    SmallVec<double, 3> test2(2.1, 3.8, 4.5);
+    std::clog << (test+test2) << std::endl;
     
     
     
@@ -51,8 +52,8 @@ int main(int argc, const char * argv[])
     
     
     timer[__total_elapse_time].StopTimer();
-    io_ops->log_info << "Program ends now. Elapsed time: " << timer[__total_elapse_time].GiveTime() << std::endl;
-    io_ops->PrintStars(io_ops->__normal_output);
+    io_ops->log_info << "Program ends now. Elapsed time: " << timer[__total_elapse_time].GiveTime() << "\n";
+    io_ops->PrintStars(std::clog, io_ops->__normal_output);
     io_ops->Output(std::clog, io_ops->log_info, io_ops->__normal_output, io_ops->__master_only);
     
 #ifdef MPI_ON
