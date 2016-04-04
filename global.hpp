@@ -22,15 +22,23 @@
 #include <sstream>
 #include <vector>
 #include <string>
+#include <bitset>
 #include <iomanip>
 // other library
 #include <unistd.h>
 #include <getopt.h>
 
-//#define MPI_ON
+#define MPI_ON
 #ifdef MPI_ON
 #include "mpi.h"
 #endif // MPI_ON
+
+#ifndef OLDCPP
+// Check c++11 support
+#if __cplusplus <= 199711L
+#error This program needs at least a C++11 compliant compiler (or define OLDCPP as an expedient).
+#endif // __cplusplus
+#endif // OLDCPP
 
 /*! \class Timer
  *  \brief served as timer */

@@ -13,9 +13,9 @@
 
 #include "global.hpp"
 
-/*
- * An important thing to remember before everything: template classes need to have the method definitions inside the header file.
- */
+/***********************************/
+/********** SmallVec Part **********/
+/***********************************/
 
 /*! \struct template <bool, class T, class U> __SelectIf_base
  *  \brief a template for struct __SelectIF to accept a bool as condition */
@@ -53,6 +53,11 @@ struct PromoteNumeric {
     typename __SelectIf<std::numeric_limits<T>::is_integer, U, T>::type // middle, served as U for outermost
     >::type type; // outermost layer
 };
+
+/*
+ * N.B.: template classes need to have the method definitions inside the header file, in order to let the linker work.
+ * Alternatively, you can put definitions in other file and include after declaration in the header file.
+ */
 
 /*! \class template <class T, int D> SmallVec
  *  \brief define a vector class and all related arithmetic computations
@@ -432,13 +437,211 @@ operator / (const SmallVec<T, D>& lhs, const U rhs) {
 }
 
 
+/***********************************/
+/********** MortonKey Part *********/
+/***********************************/
+
+/*
+ * A MortonKey is a 128-bit (16 byte) number whose leftmost 32 bits are the particle index; the remaining 96 bits are the three integer coordinates interleaved into a Morton key.
+ * N.B.: modern C++ offers bitset. If you are dealing with super large amout of particles (larger than 2^32 ~ 4.3 billion), then you might want to switch __uint128_t to bitset.
+ */
 
 
+/*! \struct template <int D> struct Orthant
+ *  \brief orthant is the generalization of quadrant and octant and even hyperoctant in n>3 dimensions. This struct gives the directions in each dimension (+1 or -1). We will need them while building trees.
+ *  \tparam D dimension of this vector */
+template <int D>
+struct Orthant {
+    static const SmallVec<int, D> orthants[1<<D];
+};
 
+/*
+ * Now define functions to output morton key
+ */
 
+/*! \fn template <typename T> void OutBinary(std::ostream &stream, T x)
+ *  \brief output an integer number bit by bit */
+template <typename T>
+void OutBinary(std::ostream &stream, T x) {
+    std::bitset<sizeof(T)*8> bits(x);
+    stream << bits;
+}
 
+/*! \class BaseMortonKey
+ *  \brief base class for MortonKey, use 128 bit key for all dimensions */
+class BaseMortonKey {
+private:
+    /*
+     * Below are useful constants worked for dilate3_32
+     */
+    
+    /*! \var __uint128_t m1
+     *  \brief binary: {0...63...0} 1 {0...63...0} 1 */
+    __uint128_t m1;
+    
+    /*! \var __uint128_t m2
+     *  \brief binary: {0...63...0} 1 {0...31...0} 1 {0...31...0} 1 */
+    __uint128_t m2;
+    
+    /*! \var __uint128_t c1
+     *  \brief binary: {1...32...1}{0...64...0}{1...32...1} */
+    __uint128_t c1;
+    
+    /*! \var __uint128_t c2
+     *  \brief binary: {0...16...0} {{1...16...1}{0...32...0}}x2 {1...16...1} */
+    __uint128_t c2;
+    
+    /*! \var __uint128_t c3
+     *  \brief binary: {{1...8...1}{0...16...0}}x5 {1...8...1} */
+    __uint128_t c3;
+    
+    /*! \var __uint128_t c4
+     *  \brief binary: {000011110000}x10 {00001111} */
+    __uint128_t c4;
+    
+    /*! \var __uint128_t c5
+     *  \brief binary: {110000}x21 {11} */
+    __uint128_t c5;
+    
+    /*! \var __uint128_t c6
+     *  \brief binary: {01} {001}x42 */
+    __uint128_t c6;
+    
+    /*! \var __uint128_t upper32mask0
+     *  \brief binary {0...32...0}{1...96...1} */
+    __uint128_t upper32mask0;
+    
+    /*
+     * Magic numbers for double2int: note that the double 0x1p+0(=1 in decimal) cannot be converted this way, so that the range of numbers is, strictly,  [0, 1). This two magic number make sure that the only 2^32 particles can be distinguished in one dimension. In other word, the minimum distance between two particles (or to be recognized as two particles) in one dimension case is 1.0/2^32 = 2.3283e-10.
+     */
+    
+    /*! \var static constexpr double MAGIC = 6755399441055744.0
+     *  \brief MAGIC = 2^52 + 2^51 = (0x0018000000000000)_16 */
+    static constexpr double MAGIC = 6755399441055744.0;
+    /*! \var static constexpr double MAXIMUMINTEGER = 4294967294.0
+     *  \brief MAGIC = 2^32 - 2 = (0x00000000FFFFFFFE)_16 */
+    static constexpr double MAXIMUMINTEGER = 4294967294.0;
+    
+public:
+    // define name alias for intuitive definition
+#ifdef OLDCPP
+    typedef __uint128_t morton_key;
+#else // OLDCPP
+    using morton_key = __uint128_t;
+#endif // OLDCPP
+    
+    /*! \fn BaseMortonKey()
+     *  \brief constructor */
+    BaseMortonKey();
+    
+    /*! \fn ~BaseMortonKey()
+     *  \brief destructor */
+    ~BaseMortonKey();
+    
+    /*! \fn __uint32_t Double2Int(double d)
+     *  \brief convert a double on [0, 1) to an unsigned 32 bit integer */
+    __uint32_t Double2Int(double d);
+    
+    /*! \fn void InitializeMortonConstants()
+     *  \brief initialize constants used in future calculations */
+    void InitializeMortonConstants();
+    
+    /*! \fn inline int Key8Level(morton_key &m_key, int &level)
+     *  \brief extract info (three digits) of specific level from the 96-bit key */
+    inline int Key8Level(morton_key m_key, int level);
+    
+    /*! \fn void OutKey(std::ostream &stream, morton_key m_key)
+     *  \brief output the particle index and its key */
+    void OutKey(std::ostream &stream, morton_key m_key);
+    
+    /*! \fn inline int ParIndex(morton_key m_key)
+     *  \brief return the particle index from the Morton Key */
+    inline int ParIndex(morton_key m_key);
+    
+    /*! \fn morton_key Dilate3_Int32(int pos)
+     *  \brief spread the bits of pos 3 apart: i.e., {1011} becomes {001 000 001 001} */
+    morton_key Dilate3_Int32(int pos);
+    
+};
 
+/*
+ * A functor, or a function object, is an object that can behave like a function. This is done by defining operator()() of the class. In this case, implement operator()() as a comparison function.
+ */
 
+/*! \struct AscendingMorton
+ *  \brief define a functor similar to std::greater<T>() to compare the 96-bit morton key */
+struct AscendingMorton {
+    bool operator() (BaseMortonKey::morton_key x, BaseMortonKey::morton_key y) {
+        return ( (x<<32) < (y<<32) );
+    }
+};
+
+/*! \class template <int D> MortonKey
+ *  \brief  */
+template <int D>
+class MortonKey : public BaseMortonKey {
+private:
+    
+public:
+    
+#ifdef OLDCPP
+    typedef SmallVec<int, D> ivec;
+    typedef SmallVec<float, D> fvec;
+    typedef SmallVec<double, D> dvec;
+#else // OLDCPP
+    using ivec = SmallVec<int, D>;
+    using fvec = SmallVec<float, D>;
+    using dvec = SmallVec<double, D>;
+#endif // OLDCPP
+    
+    /*! \var dvec scale
+     *  \brief scale the box length to 1 */
+    dvec scale;
+    
+    /*! \var dvec boxmin, boxmax
+     *  \brief the bounding box in user coordinates to be mapped to [0, 1)^D */
+    dvec boxmin, boxmax;
+    
+    /*! \fn InitMortonKey(dvec __boxmin, dvec __boxmax);
+     *  \brief initialize the space scale, set base for calculations of Morton Keys */
+    void InitMortonKey(dvec __boxmin, dvec __boxmax) {
+        boxmin = __boxmin;
+        boxmax = __boxmax;
+        for (int d = 0; d < D; d++) {
+            scale[d] = 1.0 / (boxmax[d] - boxmin[d]);
+        }
+    }
+    
+    /*! \fn template <class U> Morton(SmallVec<U, D> pos, int index)
+     *  \brief convert a position vector pos and particle index into a 128-bit Morton Key */
+    template <class U>
+    morton_key Morton(SmallVec<U, D> pos, int index) {
+        dvec pos_scaled = pos - boxmin;
+        for (int d = 0; d < D; d++) {
+            pos_scaled[d] *= scale[d];
+        }
+        
+        SmallVec<__uint32_t, D> int_pos;
+        for (int d = 0; d < D; d++) {
+            int_pos[d] = Double2Int(pos_scaled[d]);
+        }
+        return Morton(int_pos, index);
+    }
+    
+    /*! \fn Morton(SmallVec<__uint32_t, D> pos, int index)
+     *  \brief overloading Morton above for __uint32_t */
+    morton_key Morton(SmallVec<__uint32_t, D> pos, int index) {
+        morton_key result = (static_cast<__uint128_t>(index))<<96;
+        for (int d = 0; d < D; d++) {
+            result |= (Dilate3_Int32(pos[d])<<d);
+        }
+    }
+    
+};
+
+/********************************/
+/********** BHTree Part *********/
+/********************************/
 
 
 
