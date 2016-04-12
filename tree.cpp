@@ -153,9 +153,9 @@ void BaseMortonKey::OutKey(std::ostream &stream, morton_key m_key)
     }
 }
 
-/*! \fn inline int ParIndex(morton_key m_key)
+/*! \fn inline int ParticleIndex(morton_key m_key)
  *  \brief return the particle index from the Morton Key */
-inline int BaseMortonKey::ParIndex(morton_key m_key) {
+inline int BaseMortonKey::ParticleIndex(morton_key m_key) {
     return (m_key>>96);
 }
 

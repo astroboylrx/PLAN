@@ -5,7 +5,7 @@
 //  Created by Rixin Li on 3/11/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
 //
-//  The following code are based on programs written by Dr. Philip Pinto during his course (ASTR596) in fall 2015.
+//  Some of the following code are based on programs written by Dr. Philip Pinto during his course (ASTR596) in fall 2015.
 //  Descriptions and comments are written by Rixin Li.
 
 #ifndef tree_hpp
@@ -16,6 +16,10 @@
 /***********************************/
 /********** SmallVec Part **********/
 /***********************************/
+
+/*
+ * N.B.: template classes need to have the method definitions inside the header file, in order to let the linker work. Alternatively, you can put definitions in other file and include after declaration in the header file.
+ */
 
 /*! \struct template <bool, class T, class U> __SelectIf_base
  *  \brief a template for struct __SelectIF to accept a bool as condition */
@@ -53,11 +57,6 @@ struct PromoteNumeric {
     typename __SelectIf<std::numeric_limits<T>::is_integer, U, T>::type // middle, served as U for outermost
     >::type type; // outermost layer
 };
-
-/*
- * N.B.: template classes need to have the method definitions inside the header file, in order to let the linker work.
- * Alternatively, you can put definitions in other file and include after declaration in the header file.
- */
 
 /*! \class template <class T, int D> SmallVec
  *  \brief define a vector class and all related arithmetic computations
@@ -436,6 +435,118 @@ operator / (const SmallVec<T, D>& lhs, const U rhs) {
     return tmp;
 }
 
+/***********************************/
+/********** Particle Part **********/
+/***********************************/
+
+/*! \class template <int D> Particle
+ *  \brief data set for one particle
+ *  \tparam D dimension of data */
+template <int D>
+class Particle {
+private:
+    
+public:
+    /*! \var SmallVec<double, D> r, v
+     *  \brief position vector r and velocity vector v */
+    SmallVec<double, D> pos, vec;
+    
+    /*! \var double m
+     *  \brief particle mass in code unit */
+    double mass;
+    
+    /*! \var double radius
+     *  \brief particle radius */
+    double radius;
+    
+    /*! \var int id
+     *  \brief particle ID in total particle set */
+    int id;
+};
+
+/*! \class template <int D> ParticleSet
+ *  \brief data for the entire particle set
+ *  \tparam D dimension of data */
+template <int D>
+class ParticleSet {
+private:
+    
+public:
+    /*! \var int num_particle
+     *  \brief number of particles */
+    int num_particle;
+    
+    /*! \var int num_type
+     *  \brief number of particle types */
+    int num_type;
+    
+    /*! \var double coor_lim
+     *  \brief coordinate limits for grid and domain.
+     *  It is in the order of grid limits (x1l, x1u, x2l, x2u, x3l, x3u) and domain limits (x1dl, x1du, x2dl, x2du, x3dl, x3du), where l means lower limit, u means upper limit, d means domain */
+    double coor_lim[12];
+    
+    /*! \var std::vector<double> type_info
+     *  \brief info of different types in lis file */
+    std::vector<double> type_info;
+    
+    /*! \var double time
+     *  \brief current time in simulation */
+    double time;
+    
+    /*! \var double dt
+     *  \brief current time step */
+    double dt;
+    
+    /*! \var Particle<D> particles
+     *  \brief particle set */
+    Particle<D> *particles;
+    
+    /*! \fn ParticleSet()
+     *  \brief constructor */
+    ParticleSet() : particles(nullptr) {}
+    
+    /*! \fn ~ParticleSet()
+     *  \brief destructor */
+    ~ParticleSet() {
+        delete [] particles;
+        particles = nullptr;
+    }
+    
+    /*! \fn Particle<D> operator[] (const size_t i) const
+     *  \brief define operator[] for easy access */
+    Particle<D> operator[] (const size_t i) const {
+        assert(i < num_particle);
+        return *(particles+i);
+    }
+    
+    /*! \fn Particle<D>& operator[] (const size_t i)
+     *  \brief overload operator[] for element modification */
+    Particle<D>& operator[] (const size_t i) {
+        assert(i < num_particle);
+        return *(particles+i);
+    }
+    
+    /*! \fn void Reset()
+     *  \brief delete particle set */
+    void Reset() {
+        delete [] particles;
+        particles = nullptr;
+        
+    }
+    
+    /*! \fn void AllocateSpace(int N)
+     *  \brief allcoate space for particles */
+    void AllocateSpace(int N) {
+        Reset();
+        num_particle = N;
+        particles = new Particle<D>[N];
+    }
+    
+    /*! \fn void ReadLisFile(std::string filename)
+     *  \brief read particle data from *.lis file */
+    void ReadLisFile(std::string filename);
+    
+};
 
 /***********************************/
 /********** MortonKey Part *********/
@@ -554,9 +665,9 @@ public:
      *  \brief output the particle index and its key */
     void OutKey(std::ostream &stream, morton_key m_key);
     
-    /*! \fn inline int ParIndex(morton_key m_key)
+    /*! \fn inline int ParticleIndex(morton_key m_key)
      *  \brief return the particle index from the Morton Key */
-    inline int ParIndex(morton_key m_key);
+    inline int ParticleIndex(morton_key m_key);
     
     /*! \fn morton_key Dilate3_Int32(int pos)
      *  \brief spread the bits of pos 3 apart: i.e., {1011} becomes {001 000 001 001} */
@@ -642,6 +753,406 @@ public:
 /********************************/
 /********** BHTree Part *********/
 /********************************/
+
+/*! \class template <int D> class BHtree : public MortonKey<D>
+ *  \brief BHtree is the tree class for organizing particle data. In 3D, it's similar to octree.
+ *  \tparam D dimension of this vector */
+template <int D>
+class BHtree : public MortonKey<D> {
+private:
+    
+public:
+    
+#ifdef OLDCPP
+    typedef SmallVec<int, D> ivec;
+    typedef SmallVec<float, D> fvec;
+    typedef SmallVec<double, D> dvec;
+#else // OLDCPP
+    using ivec = SmallVec<int, D>;
+    using fvec = SmallVec<float, D>;
+    using dvec = SmallVec<double, D>;
+#endif // OLDCPP
+    
+    /*! \struct InternalParticle
+     *  \brief necessary particle data for tree */
+    struct InternalParticle {
+        /*! \var dvec pos
+         *  \brief the coordinates of particle position */
+        dvec pos;
+        
+        /*! \var double mass
+         *  \brief the particle mass */
+        double mass;
+        
+        /*! \var __uint32_t id
+         *  \brief particle index */
+        __uint32_t id;
+    };
+    
+    /*! \struct TreeNode
+     *  \brief tree node structure */
+    struct TreeNode {
+        /*! \var dvec center
+         *  \brief center coordinates of a node */
+        dvec center;
+        
+        /*! \var double half_width
+         *  \brief half the width of a node */
+        double half_width;
+        
+        /*! \var __uint32_t begin, end
+         *  \brief the beginning/ending particle index in node */
+        __uint32_t begin;
+        
+        /*! \var __uint32_t parent
+         *  \brief the parent node's index */
+        __uint32_t parent;
+        
+        /*! \var __uint32_t first_daughter;
+         *  \brief the index of first daughter node */
+        __uint32_t first_daughter;
+        
+        /*! \var __uint16_t orthant
+         *  \brief orthant is the daughter direction from parent */
+        __uint16_t orthant;
+        
+        /*! \var __uint8_t num_daughter
+         *  \brief the number of daughters */
+        __uint8_t num_daughter;
+        
+        /*! \var __uint8_t level
+         *  \brief level in tree */
+        __uint8_t level;
+    };
+    
+    /*! \var static const int max_level = 32
+     *  \brief the maximum levels of this tree is 32 */
+    static const int max_level = 32;
+    
+    /*! \var typename MortonKey<D>::morton_key *morton
+     *  \brief store all the morton key of particles */
+    typename MortonKey<D>::morton_key *morton;
+    
+    /*! \var int num_particle
+     *  \brief number of particles */
+    int num_particle;
+    
+    /*! \var InternalParticle *particle_list
+     *  \brief a list of particle data */
+    InternalParticle *particle_list;
+    
+    /*! \var TreeNode *tree;
+     *  \brief the whole tree data */
+    TreeNode *tree;
+    
+    /*! \var int num_leaf_set, *leaf_set
+     *  \brief (the number of) leaf nodes */
+    int num_leaf_nodes, *leaf_nodes;
+    
+    /*! \var int num_nodes, *node2leaf
+     *  \brief TBD */
+    int num_nodes, *node2leaf;
+    
+    /*! \var int max_leaf_size
+     *  \brief max number of  */
+    int max_leaf_size;
+    
+    /*! \var int max_daughters
+     *  \brief max number of daughters 2^D */
+    int max_daughters;
+    
+    /*! \var dvec root_center
+     *  \brief the center coordinates of root node */
+    dvec root_center;
+    
+    /*! \var int root
+     *  \brief root node */
+    int root;
+    
+    /*! \var int root_level
+     *  \brief the level of root node */
+    int root_level;
+    
+    /*! \var int node_ptr
+     *  \brief use an integer as the pointer of particle (since the index of particle is int) */
+    int node_ptr;
+    
+    /*! \var double half_width
+     *  \brief half width of the whole tree structure */
+    double half_width;
+    
+    /*! \var int level_count[max_level]
+     *  \brief TBD */
+    int level_count[max_level];
+    
+    /*! \var int level_ptr[max_level]
+     *  \brief TBD */
+    int level_ptr[max_level];
+    
+    /*! \var void *heaps;
+     *  \brief TBD */
+    void *heaps;
+    
+    /*! \fn BHtree()
+     *  \brief constructor, about the member initializer lists, refer to http://en.cppreference.com/w/cpp/language/initializer_list */
+    BHtree() : tree(nullptr), morton(nullptr), leaf_nodes(nullptr), node2leaf(nullptr), particle_list(nullptr) {
+        max_daughters = (1<<D);
+        root = 0;
+        root_level = 1;
+        // heaps TBD
+    }
+    
+    /*! \fn Reset()
+     *  \brief release memory and reset */
+    void Reset() {
+        num_particle = 0;
+        
+        /*
+         * Delete operator releases the memory of objects allocated by new operator; delete [] --> new []. Since delete operator will perform nullptr check first, we can safely use it without check. An expression with the delete[] operator, first calls the appropriate destructors for each element in the array (if these are of a class type), and then calls an array deallocation function (refer to http://www.cplusplus.com/reference/new/operator%20delete[]/).
+         * With -std=c++11 and above, we should try to use shared_ptr for smart memory managements. Mark here and implement later.
+         */
+        
+        delete [] particle_list;
+        particle_list = nullptr;
+        
+        delete [] tree;
+        tree = nullptr;
+        
+        delete [] morton;
+        morton = nullptr;
+        
+        delete [] leaf_nodes;
+        leaf_nodes = nullptr;
+        
+        delete [] node2leaf;
+        node2leaf = nullptr;
+    }
+    
+    /*! \fn ~BHtree()
+     *  \brief destructor */
+    ~BHtree() {
+        Reset();
+        // heaps TBD
+    }
+    
+    /*! \fn void SortPoints()
+     *  \brief sort points by morton key and then copy back to particle list */
+    void SortPoints() {
+        InternalParticle *tmp = new InternalParticle[num_particle];
+        for (int i = 0; i != num_particle; i++) {
+            tmp[i] = particle_list[ParticleIndex(morton[i])];
+        }
+        std::memcpy(particle_list, tmp, sizeof(InternalParticle)*num_particle);
+        delete [] tmp;
+    }
+    
+    /*! \fn void CountNodesLeaves(int const level, int __begin, int const __end)
+     *  \brief traverse the tree and count nodes and leaves */
+    void CountNodesLeaves(int const level, int __begin, int const __end) {
+        int orthant = Key8Level(morton[__begin], level);
+        while ( (orthant < max_daughters) && (__begin < __end)) {
+            int count = 0;
+            while (__begin < __end) {
+                if (Key8Level(morton[__begin], level) == orthant ) {
+                    __begin++;
+                    count++;
+                } else {
+                    // already sorted, if false, then just break
+                    break;
+                }
+            }
+            assert(count > 0); // this is weird ???
+            
+            level_count[level]++;
+            num_nodes++;
+            
+            if (count <= max_leaf_size) {
+                num_leaf_nodes++; // only nodes with leaves < max_leaf_size are leaves
+            } else {
+                CountNodesLeaves(level+1, __begin-count, __begin-1);
+            }
+            
+            if (__begin < __end) {
+                orthant = Key8Level(morton[__begin], level); // search next data
+            }
+        }
+        
+    }
+    
+    /*! \fn void FillTree(int const level, int __begin, int const __end, int const parent, dvec const center, double const __half_width)
+     *  \brief fill the tree with data */
+    void FillTree(int const level, int __begin, int const __end, int const __parent, dvec const __center, double const __half_width) {
+        assert(level < max_level);
+        assert(__end > __begin); // note if this will cause bug
+        assert(tree[__parent].first_daughter == 0);
+        assert(tree[__parent].num_daughter == 0); // parent shouldn't have any daughters
+        
+        int orthant = Key8Level(morton[__begin], level);
+        while (__begin < __end) {
+            assert( orthant < max_daughters);
+            
+            // count number of particles in this orthant
+            int count = 0;
+            while (__begin < __end) {
+                if (Key8Level(morton[__begin], level) == orthant) {
+                    __begin++;
+                    count++;
+                } else {
+                    break;
+                }
+            }
+            assert(count > 0);
+            
+            // get daughter node number in tree
+            int daughter = level_ptr[level];
+            level_ptr[level]++;
+            
+            if (tree[__parent].first_daughter == 0) {
+                // first daughter
+                assert( tree[__parent].num_daughter = 0);
+                tree[__parent].first_daughter = daughter;
+                tree[__parent].num_daughter = 1;
+            } else {
+                // subsequent daughters
+                tree[__parent].num_daughter++;
+                assert(tree[__parent].num_daughter <= max_daughters);
+            }
+            
+            TreeNode *p = &tree[daughter];
+            p->level = level + 1;
+            p->parent = __parent;
+            p->begin = __begin - count;
+            p->end = __begin - 1;
+            p->half_width = half_width;
+            for (int d = 0; d < D; d++) {
+                p->center[d] = __center[d] + half_width * Orthant<D>::orthant[orthant][d];
+            }
+            p->orthant = orthant;
+            p->num_daughter = 0;
+            node_ptr++;
+            assert(node_ptr < num_nodes);
+            
+            if (count <= max_leaf_size) {
+                // node with <= max_leaf_size particles is a leaf
+                leaf_nodes[num_leaf_nodes] = daughter;
+                node2leaf[daughter] = num_leaf_nodes;
+                num_leaf_nodes++;
+            } else {
+                // node with > max_leaf_size particles is a branch
+                FillTree(p->level, __begin-count, __begin-1, daughter, p->center, 0.5*__half_width);
+            }
+            
+            // now next daughter of this node
+            if (__begin < __end) {
+                orthant = Key8Level(morton[__begin], level);
+            }
+        }
+    }
+    
+    /*! \fn void BuildTree(dvec const __center, double const __half_width, ParticleSet<D> const &particle_set, int const __max_leaf_size)
+     *  \brief build tree from particle data */
+    void BuildTree(dvec const __center, double const __half_width, ParticleSet<D> const &particle_set, int const __max_leaf_size) {
+        Reset();
+        half_width = __half_width;
+        root_center = __center;
+        max_leaf_size = __max_leaf_size;
+        
+        num_particle = particle_set.num_particle;
+        particle_list = new InternalParticle[num_particle];
+        
+        for (int i = 0; i != num_particle; i++) {
+            particle_list[i].pos = particle_set[i].pos;
+            particle_list[i].mass = particle_set[i].mass;
+            particle_list[i].id = i; // original index of particles
+        }
+        
+        // compute Morton Keys and sort particle_list by Morton order
+        this->InitMortonKey(root_center-dvec(half_width), root_center+dvec(half_width));
+        morton = new typename MortonKey<D>::morton_key[num_particle];
+        
+        for (int i = 0; i != num_particle; i++) {
+            morton[i] = Morton(particle_list[i].pos, i);
+        }
+        std::sort(&(morton[0]), &(morton[num_particle]), AscendingMorton());
+        for (int i = 0; i != num_particle-1; i++) {
+            assert((morton[i]<<32) < (morton[i+1]<<32));
+        }
+        SortPoints();
+        
+        num_leaf_nodes = 0;
+        level_count[0] = 1;
+        for (int level = 1; level < max_level; level++) {
+            level_count[level] = 0;
+        }
+        
+        // run through the data once to determine space required for tree
+        num_nodes = 1; // root contribute one
+        CountNodesLeaves(root_level, 0, num_particle);
+        
+        assert(num_nodes == std::accumulate(level_count, level_count+max_level, 0));
+        
+        // allocate space for tree, leaf_nodes, and node2leaf index mapping
+        node2leaf = new int[num_nodes];
+        for (int i = 0; i < num_nodes; i++) {
+            node2leaf[i] = -1;
+        }
+        leaf_nodes = new int[num_leaf_nodes];
+        tree = new TreeNode[num_nodes];
+        
+        level_ptr[0] = 0;
+        for (int level = 1; level < max_level; level++) {
+            level_ptr[level] = level_ptr[level-1] + level_count[level-1];
+        }
+        node_ptr = 0;
+        TreeNode *p = &tree[root];
+        p->first_daughter = 0;
+        p->orthant = 0;
+        p->num_daughter = 0;
+        p->level = root_level;
+        p->center = root_center;
+        p->half_width = half_width;
+        p->begin = 0;
+        p->end = num_particle - 1;
+        p->parent = -1;
+        
+        // run through the data again to build the tree
+        num_leaf_nodes = 0;
+        FillTree(root_level, 0, num_particle, root, root_center, 0.5*half_width);
+        assert(node_ptr + 1 == num_nodes);
+        delete [] morton;
+    }
+    
+    
+    
+    
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
