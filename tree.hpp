@@ -79,7 +79,7 @@ public:
      *  \brief overloading constructor to broadcast a scalar, e.g., unit_vec = SmallVec<double, 3>(1.0). For keyword "explicit", read explanations below */
     template <class U>
     explicit SmallVec(const U& scalar) {
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             data[i] = static_cast<T>(scalar);
         }
     }
@@ -125,7 +125,7 @@ public:
      *  \brief unary operations (sign): make -SmallVec return -1*data */
     SmallVec operator -() {
         SmallVec<T, D> result;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             result[i] = -data[i];
         }
         return result;
@@ -135,7 +135,7 @@ public:
      *  \brief compound assignment operator += */
     template <class U>
     SmallVec<T, D>& operator += (const SmallVec<U, D>& rhs) {
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             data[i] += rhs.data[i];
         }
         return *this;
@@ -145,7 +145,7 @@ public:
      *  \brief compound assignment operator -= */
     template <class U>
     SmallVec<T, D>& operator -= (const SmallVec<U, D>& rhs) {
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             data[i] -= rhs.data[i];
         }
         return *this;
@@ -155,7 +155,7 @@ public:
      *  \brief compound assignment operator *= */
     template <class U>
     SmallVec<T, D>& operator *= (const U rhs) {
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             data[i] *= rhs;
         }
         return *this;
@@ -165,7 +165,7 @@ public:
      *  \brief compound assignment operator /= */
     template <class U>
     SmallVec<T, D>& operator /= (const U rhs) {
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             data[i] /= rhs;
         }
         return *this;
@@ -175,7 +175,7 @@ public:
      *  \brief calculate the norm of this vector, |x|, for at least double precision */
     typename PromoteNumeric<T, double>::type Norm() const {
         typename PromoteNumeric<T, double>::type sum = 0;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             sum += data[i] * data[i];
         }
         return sqrt(sum);
@@ -185,7 +185,7 @@ public:
      *  \brief calculate the norm^2 of this vector, |x|^2, for at least double precision */
     typename PromoteNumeric<T, double>::type Norm2() const {
         typename PromoteNumeric<T, double>::type sum = 0;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             sum += data[i] * data[i];
         }
         return sum;
@@ -232,7 +232,7 @@ public:
         SmallVec<typename PromoteNumeric<T, U>::type, D> diff;
         diff = *this - rhs;
         bool val = true;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             val = val && fabs(diff[i] < epsilon);
         }
         return val;
@@ -243,12 +243,12 @@ public:
     template <class U, class V>
     int RelClose(const SmallVec<U, D>& rhs, const V epsilon) const {
         SmallVec<typename PromoteNumeric<T, U>::type, D> sum, diff;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             sum[i] = fabs(data[i]) + fabs(rhs[i]);
         }
         diff = *this - rhs;
         bool val = true;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             val = val && ((2 * fabs(diff[i]) / sum[i]) < epsilon);
         } // if sum[i] = 0, we will get nan
         return val;
@@ -258,7 +258,7 @@ public:
      *  \brief determine if every element is finite */
     bool IsFinite() const {
         bool val = true;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             val = val && std::isfinite(data[i]);
         }
         return val;
@@ -269,7 +269,7 @@ public:
     template <class U>
     bool operator == (const SmallVec<U, D>& rhs) const {
         bool val = true;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             val = val && (data[i] == rhs[i]);
         }
         return val;
@@ -315,7 +315,7 @@ public:
     /*! \fn SmallVec<T, D> SetZeros()
      *  \brief reset data to {0} */
     SmallVec<T, D> SetZeros() {
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             data[i] = 0;
         }
         return *this;
@@ -326,7 +326,7 @@ public:
     template <class U, class V>
     bool InRange(U low, V high) {
         bool val = true;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             val = val && (data[i] >= low && data[i] <= high);
         }
         return val;
@@ -337,7 +337,7 @@ public:
     template <class U, class V>
     bool InRange(SmallVec<U, D> low, SmallVec<V, D> high) {
         bool val = true;
-        for (int i = 0; i < D; i++) {
+        for (int i = 0; i != D; i++) {
             val = val && (data[i] >= low[i] && data[i] <= high[i]);
         }
         return val;
@@ -381,7 +381,7 @@ template <class T, class U, int D>
 inline SmallVec<typename PromoteNumeric<T, U>::type, D>
 operator + (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
     SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i < D; i++) {
+    for (int i = 0; i != D; i++) {
         tmp.data[i] = lhs.data[i] + rhs.data[i];
     }
     return tmp;
@@ -393,7 +393,7 @@ template <class T, class U, int D>
 inline SmallVec<typename PromoteNumeric<T, U>::type, D>
 operator - (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
     SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i < D; i++) {
+    for (int i = 0; i != D; i++) {
         tmp.data[i] = lhs.data[i] - rhs.data[i];
     }
     return tmp;
@@ -417,7 +417,7 @@ template <class T, class U, int D>
 inline SmallVec<typename PromoteNumeric<T, U>::type, D>
 operator * (const T lhs, const SmallVec<U, D>& rhs) {
     SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i < D; i++) {
+    for (int i = 0; i != D; i++) {
         tmp.data[i] = lhs * rhs.data[i];
     }
     return tmp;
@@ -429,7 +429,7 @@ template <class T, class U, int D>
 inline SmallVec<typename PromoteNumeric<T, U>::type, D>
 operator / (const SmallVec<T, D>& lhs, const U rhs) {
     SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i < D; i++) {
+    for (int i = 0; i != D; i++) {
         tmp.data[i] = lhs.data[i] / rhs;
     }
     return tmp;
@@ -473,8 +473,8 @@ private:
     
 public:
     /*! \var int num_particle
-     *  \brief number of particles */
-    int num_particle;
+     *  \brief number of particles (must < 2^32-2) */
+    __uint32_t num_particle;
     
     /*! \var int num_type
      *  \brief number of particle types */
@@ -531,7 +531,6 @@ public:
     void Reset() {
         delete [] particles;
         particles = nullptr;
-        
     }
     
     /*! \fn void AllocateSpace(int N)
@@ -718,7 +717,7 @@ public:
     void InitMortonKey(dvec __boxmin, dvec __boxmax) {
         boxmin = __boxmin;
         boxmax = __boxmax;
-        for (int d = 0; d < D; d++) {
+        for (int d = 0; d != D; d++) {
             scale[d] = 1.0 / (boxmax[d] - boxmin[d]);
         }
     }
@@ -728,12 +727,12 @@ public:
     template <class U>
     morton_key Morton(SmallVec<U, D> pos, int index) {
         dvec pos_scaled = pos - boxmin;
-        for (int d = 0; d < D; d++) {
+        for (int d = 0; d != D; d++) {
             pos_scaled[d] *= scale[d];
         }
         
         SmallVec<__uint32_t, D> int_pos;
-        for (int d = 0; d < D; d++) {
+        for (int d = 0; d != D; d++) {
             int_pos[d] = Double2Int(pos_scaled[d]);
         }
         return Morton(int_pos, index);
@@ -743,7 +742,7 @@ public:
      *  \brief overloading Morton above for __uint32_t */
     morton_key Morton(SmallVec<__uint32_t, D> pos, int index) {
         morton_key result = (static_cast<__uint128_t>(index))<<96;
-        for (int d = 0; d < D; d++) {
+        for (int d = 0; d != D; d++) {
             result |= (Dilate3_Int32(pos[d])<<d);
         }
     }
@@ -800,9 +799,13 @@ public:
          *  \brief half the width of a node */
         double half_width;
         
-        /*! \var __uint32_t begin, end
-         *  \brief the beginning/ending particle index in node */
+        /*! \var __uint32_t begin
+         *  \brief the beginning particle index in node */
         __uint32_t begin;
+        
+        /*! \var __uint32_t end
+         *  \brief the ending particle index in node, notice that this "end" follows the C++ tradition and serves as the off-the-end iterator */
+        __uint32_t end;
         
         /*! \var __uint32_t parent
          *  \brief the parent node's index */
@@ -834,8 +837,9 @@ public:
     typename MortonKey<D>::morton_key *morton;
     
     /*! \var int num_particle
-     *  \brief number of particles */
-    int num_particle;
+     *  \brief number of particles (must < 2^32-2) 
+     *  This must < 2^32-1-1 = 0xffffffff-1, because (*TreeNode)->end means the off-the-end iterator, so we need one more number than the total number of particles. Anyway, if we are dealing with more particles than that, we should adapt our tools and use more advanced Morton Keys */
+    __uint32_t num_particle;
     
     /*! \var InternalParticle *particle_list
      *  \brief a list of particle data */
@@ -893,6 +897,10 @@ public:
      *  \brief TBD */
     void *heaps;
     
+    /*! \var double const to_diagonal;
+     *  \brief const used in SphereNodeIntersect */
+    double const to_diagonal = sqrt(D);
+    
     /*! \fn BHtree()
      *  \brief constructor, about the member initializer lists, refer to http://en.cppreference.com/w/cpp/language/initializer_list */
     BHtree() : tree(nullptr), morton(nullptr), leaf_nodes(nullptr), node2leaf(nullptr), particle_list(nullptr) {
@@ -948,12 +956,12 @@ public:
     
     /*! \fn void CountNodesLeaves(int const level, int __begin, int const __end)
      *  \brief traverse the tree and count nodes and leaves */
-    void CountNodesLeaves(int const level, int __begin, int const __end) {
-        int orthant = Key8Level(morton[__begin], level);
+    void CountNodesLeaves(int const __level, int __begin, int const __end) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
+        int orthant = Key8Level(morton[__begin], __level);
         while ( (orthant < max_daughters) && (__begin < __end)) {
             int count = 0;
             while (__begin < __end) {
-                if (Key8Level(morton[__begin], level) == orthant ) {
+                if (Key8Level(morton[__begin], __level) == orthant ) {
                     __begin++;
                     count++;
                 } else {
@@ -963,38 +971,37 @@ public:
             }
             assert(count > 0); // this is weird ???
             
-            level_count[level]++;
+            level_count[__level]++;
             num_nodes++;
             
             if (count <= max_leaf_size) {
                 num_leaf_nodes++; // only nodes with leaves < max_leaf_size are leaves
             } else {
-                CountNodesLeaves(level+1, __begin-count, __begin-1);
+                CountNodesLeaves(__level+1, __begin-count, __begin-1);
             }
             
             if (__begin < __end) {
-                orthant = Key8Level(morton[__begin], level); // search next data
+                orthant = Key8Level(morton[__begin], __level); // search next data
             }
         }
-        
     }
     
     /*! \fn void FillTree(int const level, int __begin, int const __end, int const parent, dvec const center, double const __half_width)
      *  \brief fill the tree with data */
-    void FillTree(int const level, int __begin, int const __end, int const __parent, dvec const __center, double const __half_width) {
-        assert(level < max_level);
+    void FillTree(int const __level, int __begin, int const __end, int const __parent, dvec const __center, double const __half_width) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
+        assert(__level < max_level);
         assert(__end > __begin); // note if this will cause bug
         assert(tree[__parent].first_daughter == 0);
         assert(tree[__parent].num_daughter == 0); // parent shouldn't have any daughters
         
-        int orthant = Key8Level(morton[__begin], level);
+        int orthant = Key8Level(morton[__begin], __level);
         while (__begin < __end) {
             assert( orthant < max_daughters);
             
             // count number of particles in this orthant
             int count = 0;
             while (__begin < __end) {
-                if (Key8Level(morton[__begin], level) == orthant) {
+                if (Key8Level(morton[__begin], __level) == orthant) {
                     __begin++;
                     count++;
                 } else {
@@ -1004,8 +1011,8 @@ public:
             assert(count > 0);
             
             // get daughter node number in tree
-            int daughter = level_ptr[level];
-            level_ptr[level]++;
+            int daughter = level_ptr[__level];
+            level_ptr[__level]++;
             
             if (tree[__parent].first_daughter == 0) {
                 // first daughter
@@ -1019,15 +1026,16 @@ public:
             }
             
             TreeNode *p = &tree[daughter];
-            p->level = level + 1;
+            p->level = __level + 1;
             p->parent = __parent;
             p->begin = __begin - count;
-            p->end = __begin - 1;
-            p->half_width = half_width;
-            for (int d = 0; d < D; d++) {
-                p->center[d] = __center[d] + half_width * Orthant<D>::orthant[orthant][d];
+            p->end = __begin;
+            p->half_width = __half_width;
+            for (int d = 0; d != D; d++) {
+                p->center[d] = __center[d] + __half_width * Orthant<D>::orthant[orthant][d];
             }
             p->orthant = orthant;
+            p->first_daughter = 0;
             p->num_daughter = 0;
             node_ptr++;
             assert(node_ptr < num_nodes);
@@ -1044,19 +1052,20 @@ public:
             
             // now next daughter of this node
             if (__begin < __end) {
-                orthant = Key8Level(morton[__begin], level);
+                orthant = Key8Level(morton[__begin], __level);
             }
         }
     }
     
     /*! \fn void BuildTree(dvec const __center, double const __half_width, ParticleSet<D> const &particle_set, int const __max_leaf_size)
      *  \brief build tree from particle data */
-    void BuildTree(dvec const __center, double const __half_width, ParticleSet<D> const &particle_set, int const __max_leaf_size) {
+    void BuildTree(dvec const __center, double const __half_width, ParticleSet<D> const &particle_set, int const __max_leaf_size) { // double underscore here is to avoid confusion with all sorts of members
         Reset();
         half_width = __half_width;
         root_center = __center;
         max_leaf_size = __max_leaf_size;
         
+        assert(particle_set.num_particle < (__uint32_t)0xffffffff);
         num_particle = particle_set.num_particle;
         particle_list = new InternalParticle[num_particle];
         
@@ -1081,7 +1090,7 @@ public:
         
         num_leaf_nodes = 0;
         level_count[0] = 1;
-        for (int level = 1; level < max_level; level++) {
+        for (int level = 1; level != max_level; level++) {
             level_count[level] = 0;
         }
         
@@ -1093,14 +1102,14 @@ public:
         
         // allocate space for tree, leaf_nodes, and node2leaf index mapping
         node2leaf = new int[num_nodes];
-        for (int i = 0; i < num_nodes; i++) {
+        for (int i = 0; i != num_nodes; i++) {
             node2leaf[i] = -1;
         }
         leaf_nodes = new int[num_leaf_nodes];
         tree = new TreeNode[num_nodes];
         
         level_ptr[0] = 0;
-        for (int level = 1; level < max_level; level++) {
+        for (int level = 1; level != max_level; level++) {
             level_ptr[level] = level_ptr[level-1] + level_count[level-1];
         }
         node_ptr = 0;
@@ -1112,7 +1121,7 @@ public:
         p->center = root_center;
         p->half_width = half_width;
         p->begin = 0;
-        p->end = num_particle - 1;
+        p->end = num_particle;
         p->parent = -1;
         
         // run through the data again to build the tree
@@ -1121,6 +1130,130 @@ public:
         assert(node_ptr + 1 == num_nodes);
         delete [] morton;
     }
+    
+    /*! \fn bool Within(dvec const __pos, dvec const node_center, double const __half_width)
+     *  \brief determine if a particle is within certain distance of a node center */
+    bool Within(dvec const __pos, dvec const node_center, double const __half_width) {
+        double epsilon = 1.0e-8;
+        for (int d = 0; d != D; d++) {
+            if ( !(__pos[d] >= node_center[d] - __half_width - epsilon && __pos[d] <= node_center[d] + __half_width + epsilon)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /*! \fn void CheckTree(int const node, int const __level, dvec const node_center, double const __half_width)
+     *  \brief traverse the tree and check whether each point is within the node it is supposed to be. Also check levels/widths/centers */
+    void CheckTree(int const node, int const __level, dvec const node_center, double const __half_width) {
+        assert(tree[node].level == __level);
+        assert(tree[node].half_width == __half_width);
+        
+        for (int p = tree[node].begin; p != tree[node].end; p++) {
+            if (!Within(particle_list[p].pos, node_center, __half_width)) {
+                io_ops->error_message << "Particle " << particle_list[p].pos << " outside node " << node_center << " with width " << 2*tree[node].half_width;
+            }
+        }
+        
+        for (int daughter = tree[node].first_daughter; daughter != tree[node].first_daughter + tree[node].num_daughter; daughter++) {
+            dvec tmp_center = node_center;
+            for (int d = 0; d != D; d++) {
+                tmp_center[d] += 0.5 * __half_width * Orthant<D>::orthant[tree[daughter].orthant][d];
+                dvec daughter_center = tree[daughter].center;
+                assert(tmp_center == daughter_center);
+                CheckTree(daughter, __level+1, daughter_center, 0.5*__half_width);
+            }
+        }
+    }
+    
+    /*! \fn inline bool IsLeaf(int const node)
+     *  \breif determine if a node is leaf */
+    inline bool IsLeaf(int const node) {
+        assert(node < num_nodes);
+        return (tree[node].num_daughter == 0); // N.B., TreeNode has begin and end
+    }
+    
+    /*! \fn inline int NodeSize(int const node)
+     *  \brief return the number of particles in a node */
+    inline int NodeSize(int const node) {
+        assert(node < num_nodes);
+        return tree[node].end - tree[node].begin; // note the end is off-the-end iterator
+    }
+    
+    /*! \fn inline bool InNode(dvec const __pos, int const node)
+     *  \brief determine if a particle is in a node */
+    inline bool InNode(dvec const __pos, int const node) {
+        return Within(__pos, tree[node].center, tree[node].half_width);
+    }
+    
+    /*! \fn __uint32_t Key2Leaf(typename MortonKey<D>::morton_key const __morton, int const node, int const __level)
+     *  \brief given a Morton Key, find the node number of the leaf cell where this key belongs */
+    __uint32_t Key2Leaf(typename MortonKey<D>::morton_key const __morton, int const node, int const __level) {
+        // if a leaf, just return answer
+        if (IsLeaf(node)) {
+            return node;
+        }
+        
+        // else recurse into the correct direction
+        int orthant = Key8Level(__morton, __level);
+        int daughter = -1;
+        for (int d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+            if (tree[d].orthant == orthant) {
+                daughter = Key2Leaf(__morton, d, __level+1);
+                break;
+            }
+        }
+        if (daughter == -1) {
+            io_ops->error_message << "Key2Leaf: leaf cell doesn't exist in tree." << std::endl;
+            assert(daughter >= 0);
+        }
+        return daughter;
+    }
+    
+    /*! \fn __uint32_t Pos2Node(dvec const __pos)
+     *  \brief given position, find the index of node containing it */
+    __uint32_t Pos2Node(dvec const __pos) {
+        assert( Within(__pos, root_center, half_width));
+        typename MortonKey<D>::morton_key __morton = Morton(__pos, 0); // index doesn't matter here, just give 0
+        return Key2Leaf(__morton, root, root_level);
+    }
+    
+    /*! \fn bool SphereNodeIntersect(dvec const __center, double const r, int const node)
+     *  \brief return true if any part of node is within the sphere (__center, r) */
+    bool SphereNodeIntersect(dvec const __center, double const r, int const node) {
+        assert(node < num_nodes);
+        double c2c = (tree[node].center - __center).Norm2();
+        double tmp_distance = tree[node].half_width * to_diagonal + r;
+        
+        // check if node is outside the sphere
+        if (c2c > tmp_distance * tmp_distance) {
+            return false;
+        }
+        
+        // check if node center is inside the sphere
+        if (c2c < r || c2c < tree[node].half_width) {
+            return true;
+        }
+        
+        // now do exact check for intersection
+        // notice that when we extend each side, the space is divided into multiple sub-space, and the value for each sub-space is different
+        dvec pos_min = tree[node].center - dvec(tree[node].half_width);
+        dvec pos_max = tree[node].center + dvec(tree[node].half_width);
+        
+        double mindist2 = 0;
+        for (int d = 0; d != D; d++) {
+            if (__center[d] < pos_min[d]) {
+                mindist2 += (__center[d] - pos_min[d]) * (__center[d] - pos_min[d]);
+            } else if (__center[d] > pos_max[d]) {
+                mindist2 += (__center[d] - pos_max[d]) * (__center[d] - pos_max[d]);
+            }
+        }
+        
+        return mindist2 <= r*r;
+    }
+    
+    
+    
     
     
     

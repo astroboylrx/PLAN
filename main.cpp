@@ -40,8 +40,7 @@ int main(int argc, const char * argv[])
     io_ops->Initialize(argc, argv);
     
     SmallVec<double, 3> test(2.5, 3.8, 4.1);
-    SmallVec<double, 3> test2(2.1, 3.8, 4.5);
-    std::clog << test.Norm() << std::endl;
+    std::clog << test << std::endl;
     
     
     

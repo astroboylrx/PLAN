@@ -116,7 +116,7 @@ public:
     /*! \var int debug_flag
      *  \brief set this flag to make log_level = 2 */
     int debug_flag;
-    
+        
     /*! \var int start_num, end_num, interval
      *  \brief start/end number and interval fo the entir file loop */
     int start_num, end_num, interval;

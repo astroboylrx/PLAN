@@ -264,14 +264,14 @@ void IO_Operations::GenerateFilenames()
     file_name.lis_data_file_name.reserve(num_file * num_cpu);
     log_info << "Verifying generated data file names (only id0 and id[max]):\n";
     
-    for (int num = start_num; num <= end_num; num += interval) {
+    for (int num = start_num; num != end_num+1; num += interval) {
         std::stringstream formatted_num;
         formatted_num << std::setw(4) << std::setfill('0') << num;
         
         file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
         log_info << file_name.lis_data_file_name.back() << "\n";
-        for (int id = 1; id <= num_cpu; id++) {
-            file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"-id"+std::to_string(id)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
+        for (int id = 0; id != num_cpu; id++) {
+            file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"-id"+std::to_string(id+1)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
         }
         log_info << file_name.lis_data_file_name.back() << "\n";
     }
