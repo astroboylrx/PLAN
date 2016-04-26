@@ -75,14 +75,63 @@ public:
      *  \brief the most basic constructor, list initialization with {0} */
     SmallVec() : data{0} {}
     
-    /*! \fn template <class U> explicit SmallVec( const U& scalar)
+    
+    /*
+     * Warning: I haven't fully understand the usage of enable_if
+     */
+    
+    /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const U& scalar)
      *  \brief overloading constructor to broadcast a scalar, e.g., unit_vec = SmallVec<double, 3>(1.0). For keyword "explicit", read explanations below */
-    template <class U>
+    template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0>
     explicit SmallVec(const U& scalar) {
         for (int i = 0; i != D; i++) {
             data[i] = static_cast<T>(scalar);
         }
     }
+    
+    /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const U (&vec)[D])
+     *  \brief overloading constructor to copy an old-fashion array */
+    template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0>
+    explicit SmallVec(const U (&vec)[D]) { // remember how to reference an array
+        for (int i = 0; i != D; i++) {
+            data[i] = static_cast<T>(vec[i]);
+        }
+    }
+  
+    /*! \fn template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0> explicit SmallVec(const U (&vec)[E])
+     *  \brief overloading constructor to notify user a wrong old-fashion array is input */
+    template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0>
+    explicit SmallVec(const U (&vec)[E]) { // remember how to reference an array
+        io_ops->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
+        io_ops->Output(std::cerr, io_ops->error_message, io_ops->__even_more_output, io_ops->__all_processors);
+        exit(2);
+    }
+    
+    /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const std::array<U, D> &vec)
+     *  \brief overloading constructor to copy an STL array */
+    template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0>
+    explicit SmallVec(const std::array<U, D> &vec) {
+        for (int i = 0; i != D; i++) {
+            data[i] = static_cast<T>(vec[i]);
+        }
+    }
+    
+    /*! \fn template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0> explicit SmallVec(const std::array<U, E> &vec)
+     *  \brief overloading constructor to notify user a wrong STL array is input */
+    template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0>
+    explicit SmallVec(std::array<U, E> const &vec) {
+        io_ops->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
+        io_ops->Output(std::cerr, io_ops->error_message, io_ops->__even_more_output, io_ops->__all_processors);
+        exit(2);
+    }
+    
+    template <class U, typename std::enable_if<std::is_pointer<U>::value, int>::type = 0>
+    SmallVec(U arg) {
+        io_ops->error_message << "Error: Please don't provide a pointer to construct class SmallVec. Whether it is a pointer to scalar or a pointer to array remains unknown. " << std::endl;
+        io_ops->Output(std::cerr, io_ops->error_message, io_ops->__even_more_output, io_ops->__all_processors);
+        exit(2);
+    }
+    
     /*
      * Why do we use the keyword "explicit"? (reference: http://www.geeksforgeeks.org/g-fact-93/ )
      * In C++, if a class has a constructor which can be called with a single argument, then this constructor becomes conversion constructor because such a constructor allows conversion of the single argument to the class being constructed.
@@ -449,15 +498,15 @@ private:
 public:
     /*! \var SmallVec<double, D> r, v
      *  \brief position vector r and velocity vector v */
-    SmallVec<double, D> pos, vec;
+    SmallVec<float, D> pos, vec;
     
     /*! \var double m
      *  \brief particle mass in code unit */
-    double mass;
+    float mass;
     
     /*! \var double radius
      *  \brief particle radius */
-    double radius;
+    float radius;
     
     /*! \var int id
      *  \brief particle ID in total particle set */
@@ -480,22 +529,22 @@ public:
      *  \brief number of particle types */
     int num_type;
     
-    /*! \var double coor_lim
+    /*! \var float coor_lim
      *  \brief coordinate limits for grid and domain.
      *  It is in the order of grid limits (x1l, x1u, x2l, x2u, x3l, x3u) and domain limits (x1dl, x1du, x2dl, x2du, x3dl, x3du), where l means lower limit, u means upper limit, d means domain */
-    double coor_lim[12];
+    float coor_lim[12];
     
-    /*! \var std::vector<double> type_info
+    /*! \var std::vector<float> type_info
      *  \brief info of different types in lis file */
-    std::vector<double> type_info;
+    std::vector<float> type_info;
     
-    /*! \var double time
+    /*! \var float time
      *  \brief current time in simulation */
-    double time;
+    float time;
     
-    /*! \var double dt
+    /*! \var float dt
      *  \brief current time step */
-    double dt;
+    float dt;
     
     /*! \var Particle<D> particles
      *  \brief particle set */
@@ -541,9 +590,90 @@ public:
         particles = new Particle<D>[N];
     }
     
-    /*! \fn void ReadLisFile(std::string filename)
-     *  \brief read particle data from *.lis file */
-    void ReadLisFile(std::string filename);
+    /*! \fn void ReadLisFile(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end)
+     *  \brief read particle data from *.lis file
+     *  Assume that one cpu core read one snapshot once */
+    void ReadLisFile(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end) {
+        std::ifstream lis_file;
+        long tmp_num_particle;
+        
+        // First step, obtain the box limit from RootMin and RootMax and count the total particle numbers
+        lis_file.open(begin->c_str(), std::ios::binary);
+        if (lis_file.is_open()) {
+            lis_file.read(reinterpret_cast<char*>(coor_lim), 12*sizeof(float));
+            io_ops->log_info << *begin << ", x1l = " << coor_lim[0] << ", x1u = " << coor_lim[1]
+            << ", x2l = " << coor_lim[2] << ", x2u = " << coor_lim[3]
+            << ", x3l = " << coor_lim[4] << ", x3u = " << coor_lim[5]
+            << ", x1dl = " << coor_lim[6] << ", x1du = " << coor_lim[7]
+            << ", x2dl = " << coor_lim[8] << ", x2du = " << coor_lim[9]
+            << ", x3dl = " << coor_lim[10] << ", x3du = " << coor_lim[11] << "\n";
+            lis_file.read(reinterpret_cast<char*>(&num_type), sizeof(int));
+            io_ops->log_info << "num_type = " << num_type;
+            type_info.resize(num_type);
+            for (int i = 0; i != num_type; i++) {
+                lis_file.read(reinterpret_cast<char*>(&type_info[i]), sizeof(float));
+                io_ops->log_info << ": type_info[" << i << "] = " << type_info[i];
+            }
+            io_ops->log_info << "; || ";
+            lis_file.read(reinterpret_cast<char*>(&time), sizeof(float));
+            lis_file.read(reinterpret_cast<char*>(&dt), sizeof(float));
+            io_ops->log_info << "time = " << time << ", dt = " << dt;
+            lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
+            num_particle = static_cast<__uint32_t>(tmp_num_particle);
+            lis_file.close();
+        }
+
+        for (std::vector<std::string>::iterator it = (begin+1); it != end; it++) {
+            lis_file.open(it->c_str(), std::ios::binary);
+            if (lis_file.is_open()) {
+                lis_file.seekg((14+num_type)*sizeof(float)+sizeof(int), std::ios::beg);
+                lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
+                num_particle += static_cast<__uint32_t>(tmp_num_particle);
+                lis_file.close();
+            }
+        }
+        
+        io_ops->log_info << ", total num_particle = " << num_particle << std::endl;
+        io_ops->Output(std::clog, io_ops->log_info, io_ops->__even_more_output, io_ops->__all_processors);
+        
+        AllocateSpace(num_particle);
+        
+        // Second step, extend box limit to include ghost zone
+        __uint32_t tmp_id = 0;
+        Particle<D> *p;
+        size_t triple_float = 3 * sizeof(float);
+        size_t one_float = sizeof(float);
+        size_t one_fil = sizeof(float) + sizeof(int) + sizeof(long);
+
+        for (std::vector<std::string>::iterator it = begin; it != end; it++) {
+            lis_file.open(it->c_str(), std::ios::binary);
+            if (lis_file.is_open()) {
+                lis_file.seekg((14+num_type)*sizeof(float)+sizeof(int), std::ios::beg);
+                lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
+                std::stringstream content;
+                content << lis_file.rdbuf();
+                std::string tmp_str = content.str();
+                const char *tmp_char = tmp_str.data();
+                for (int i = 0; i != tmp_num_particle; i++) {
+                    p = &particles[tmp_id];
+                    std::memcpy((char*)p->pos.data, tmp_char, triple_float);
+                    tmp_char += triple_float;
+                    std::memcpy((char*)p->vec.data, tmp_char, triple_float);
+                    tmp_char += triple_float;
+                    std::memcpy((char*)&p->radius, tmp_char, one_float);
+                    tmp_char += one_float;
+                    std::memcpy((char*)&p->mass, tmp_char, one_float);
+                    tmp_char += one_fil;
+                    p->id = tmp_id++;
+                }
+                lis_file.close();
+            }
+        }
+        
+        io_ops->log_info << "id = " << particles[567].id << ", mass = " << particles[567].mass << ", rad = " << particles[567].radius << ", pos = " << particles[567].pos << ", v = " << particles[567].vec << std::endl;
+        io_ops->Output(std::clog, io_ops->log_info, io_ops->__even_more_output, io_ops->__all_processors);
+        
+    }
     
 };
 
@@ -893,13 +1023,13 @@ public:
      *  \brief TBD */
     int level_ptr[max_level];
     
-    /*! \var void *heaps;
-     *  \brief TBD */
-    void *heaps;
+    /*! \var std::vector<std::pair<int, double>> heaps;
+     *  \brief a heap stores k-nearest neighbours */
+    std::vector<std::pair<int, double>> heaps;
     
-    /*! \var double const to_diagonal;
+    /*! \var const double to_diagonal;
      *  \brief const used in SphereNodeIntersect */
-    double const to_diagonal = sqrt(D);
+    const double to_diagonal = sqrt(D);
     
     /*! \fn BHtree()
      *  \brief constructor, about the member initializer lists, refer to http://en.cppreference.com/w/cpp/language/initializer_list */
@@ -907,7 +1037,6 @@ public:
         max_daughters = (1<<D);
         root = 0;
         root_level = 1;
-        // heaps TBD
     }
     
     /*! \fn Reset()
@@ -940,7 +1069,7 @@ public:
      *  \brief destructor */
     ~BHtree() {
         Reset();
-        // heaps TBD
+        ClearHeaps();
     }
     
     /*! \fn void SortPoints()
@@ -954,9 +1083,9 @@ public:
         delete [] tmp;
     }
     
-    /*! \fn void CountNodesLeaves(int const level, int __begin, int const __end)
+    /*! \fn void CountNodesLeaves(const int level, int __begin, const int __end)
      *  \brief traverse the tree and count nodes and leaves */
-    void CountNodesLeaves(int const __level, int __begin, int const __end) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
+    void CountNodesLeaves(const int __level, int __begin, const int __end) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
         int orthant = Key8Level(morton[__begin], __level);
         while ( (orthant < max_daughters) && (__begin < __end)) {
             int count = 0;
@@ -986,9 +1115,9 @@ public:
         }
     }
     
-    /*! \fn void FillTree(int const level, int __begin, int const __end, int const parent, dvec const center, double const __half_width)
+    /*! \fn void FillTree(const int level, int __begin, const int __end, const int parent, const dvec center, const double __half_width)
      *  \brief fill the tree with data */
-    void FillTree(int const __level, int __begin, int const __end, int const __parent, dvec const __center, double const __half_width) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
+    void FillTree(const int __level, int __begin, const int __end, const int __parent, const dvec __center, const double __half_width) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
         assert(__level < max_level);
         assert(__end > __begin); // note if this will cause bug
         assert(tree[__parent].first_daughter == 0);
@@ -1057,9 +1186,9 @@ public:
         }
     }
     
-    /*! \fn void BuildTree(dvec const __center, double const __half_width, ParticleSet<D> const &particle_set, int const __max_leaf_size)
+    /*! \fn void BuildTree(const dvec __center, const double __half_width, ParticleSet<D> &particle_set, const int __max_leaf_size)
      *  \brief build tree from particle data */
-    void BuildTree(dvec const __center, double const __half_width, ParticleSet<D> const &particle_set, int const __max_leaf_size) { // double underscore here is to avoid confusion with all sorts of members
+    void BuildTree(const dvec __center, const double __half_width, ParticleSet<D> &particle_set, const int __max_leaf_size) { // double underscore here is to avoid confusion with all sorts of members
         Reset();
         half_width = __half_width;
         root_center = __center;
@@ -1131,9 +1260,9 @@ public:
         delete [] morton;
     }
     
-    /*! \fn bool Within(dvec const __pos, dvec const node_center, double const __half_width)
+    /*! \fn bool Within(const dvec __pos, const dvec node_center, const double __half_width)
      *  \brief determine if a particle is within certain distance of a node center */
-    bool Within(dvec const __pos, dvec const node_center, double const __half_width) {
+    bool Within(const dvec __pos, const dvec node_center, const double __half_width) {
         double epsilon = 1.0e-8;
         for (int d = 0; d != D; d++) {
             if ( !(__pos[d] >= node_center[d] - __half_width - epsilon && __pos[d] <= node_center[d] + __half_width + epsilon)) {
@@ -1143,9 +1272,9 @@ public:
         return true;
     }
     
-    /*! \fn void CheckTree(int const node, int const __level, dvec const node_center, double const __half_width)
+    /*! \fn void CheckTree(const int node, const int __level, const dvec node_center, const double __half_width)
      *  \brief traverse the tree and check whether each point is within the node it is supposed to be. Also check levels/widths/centers */
-    void CheckTree(int const node, int const __level, dvec const node_center, double const __half_width) {
+    void CheckTree(const int node, const int __level, const dvec node_center, const double __half_width) {
         assert(tree[node].level == __level);
         assert(tree[node].half_width == __half_width);
         
@@ -1166,29 +1295,29 @@ public:
         }
     }
     
-    /*! \fn inline bool IsLeaf(int const node)
+    /*! \fn inline bool IsLeaf(const int node)
      *  \breif determine if a node is leaf */
-    inline bool IsLeaf(int const node) {
+    inline bool IsLeaf(const int node) {
         assert(node < num_nodes);
         return (tree[node].num_daughter == 0); // N.B., TreeNode has begin and end
     }
     
-    /*! \fn inline int NodeSize(int const node)
+    /*! \fn inline int NodeSize(const int node)
      *  \brief return the number of particles in a node */
-    inline int NodeSize(int const node) {
+    inline int NodeSize(const int node) {
         assert(node < num_nodes);
         return tree[node].end - tree[node].begin; // note the end is off-the-end iterator
     }
     
-    /*! \fn inline bool InNode(dvec const __pos, int const node)
+    /*! \fn inline bool InNode(const dvec __pos, const int node)
      *  \brief determine if a particle is in a node */
-    inline bool InNode(dvec const __pos, int const node) {
+    inline bool InNode(const dvec __pos, const int node) {
         return Within(__pos, tree[node].center, tree[node].half_width);
     }
     
-    /*! \fn __uint32_t Key2Leaf(typename MortonKey<D>::morton_key const __morton, int const node, int const __level)
+    /*! \fn __uint32_t Key2Leaf(typename MortonKey<D>::morton_key const __morton, const int node, const int __level)
      *  \brief given a Morton Key, find the node number of the leaf cell where this key belongs */
-    __uint32_t Key2Leaf(typename MortonKey<D>::morton_key const __morton, int const node, int const __level) {
+    __uint32_t Key2Leaf(typename MortonKey<D>::morton_key const __morton, const int node, const int __level) {
         // if a leaf, just return answer
         if (IsLeaf(node)) {
             return node;
@@ -1210,17 +1339,17 @@ public:
         return daughter;
     }
     
-    /*! \fn __uint32_t Pos2Node(dvec const __pos)
+    /*! \fn __uint32_t Pos2Node(const dvec __pos)
      *  \brief given position, find the index of node containing it */
-    __uint32_t Pos2Node(dvec const __pos) {
+    __uint32_t Pos2Node(const dvec __pos) {
         assert( Within(__pos, root_center, half_width));
         typename MortonKey<D>::morton_key __morton = Morton(__pos, 0); // index doesn't matter here, just give 0
         return Key2Leaf(__morton, root, root_level);
     }
     
-    /*! \fn bool SphereNodeIntersect(dvec const __center, double const r, int const node)
+    /*! \fn bool SphereNodeIntersect(const dvec __center, const double r, const int node)
      *  \brief return true if any part of node is within the sphere (__center, r) */
-    bool SphereNodeIntersect(dvec const __center, double const r, int const node) {
+    bool SphereNodeIntersect(const dvec __center, const double r, const int node) {
         assert(node < num_nodes);
         double c2c = (tree[node].center - __center).Norm2();
         double tmp_distance = tree[node].half_width * to_diagonal + r;
@@ -1252,7 +1381,130 @@ public:
         return mindist2 <= r*r;
     }
     
+    /*! \struct template <typename T1, typename T2> struct less_second
+     *  \brief served as comparison method for heaps */
+    template <typename T1, typename T2>
+    struct less_second {
+        typedef std::pair<T1, T2> type;
+        bool operator ()(type const& a, type const& b) const {
+            return a.second < b.second;
+        }
+    };
     
+    /*! \fn void Add2Heaps(const int knn, const int i, const double dr2)
+     *  \brief add element to heaps */
+    void Add2Heaps(const int knn, const int i, const double dr2) {
+        if (heaps.size() < knn) {
+            heaps.push_back(std::pair<int, double>(i, dr2));
+            std::push_heap(heaps.begin(), heaps.end(), less_second<int, double>());
+        } else {
+            if (dr2 < heaps.front().second) {
+                std::pop_heap(heaps.begin(), heaps.end(), less_second<int, double>());
+                heaps.pop_back();
+                heaps.push_back(std::pair<int, double>(i, dr2));
+                std::push_heap(heaps.begin(), heaps.end(), less_second<int, double>());
+            }
+        }
+    }
+    
+    /*! \fn inline void ClearHeaps()
+     *  \brief release memory of heaps */
+    inline void ClearHeaps() {
+        // force clear and reallocation
+        std::vector<std::pair<int, double>>().swap(heaps);
+    }
+    
+    /*! \fn void RecursiveKNN(const dvec __pos, const int node, const double dist, const int knn)
+     *  \brief do recursive KNN search to traverse the tree */
+    void RecursiveKNN(const dvec __pos, const int node, const double dist, const int knn) {
+        if (SphereNodeIntersect(__pos, dist, node)) {
+            if (IsLeaf(node)) {
+                for (int p = tree[node].begin; p != tree[node].end; p++) {
+                    Add2Heaps(knn, p, (__pos-particle_list[p].pos).Norm2());
+                }
+            } else {
+                for (int d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+                    RecursiveKNN(__pos, d, dist, knn);
+                }
+            }
+        }
+    }
+    
+    /*! \fn void KNN_Search(const dvec __pos, const int knn, double &radius_knn, int *indices)
+     *  \brief given position, perform k-nearest neighbours search and return radius and particle indices */
+    void KNN_Search(const dvec __pos, const int knn, double &radius_knn, int *indices) {
+        assert(knn <= num_particle);
+        
+        if (heaps.size() != 0) {
+            ClearHeaps(); // clear memory first
+        }
+        heaps.reserve(knn);
+        
+        double max_dr2 = 0;
+        // obatin a estimated distance firstly
+        if (Within(__pos, root_center, half_width)) {
+            // if within the box
+            int node = Pos2Node(__pos);
+            if (NodeSize(node) == 1) {
+                node = tree[node].parent;
+            }
+            for (int p = tree[node].begin; p != tree[node].end; p++) {
+                max_dr2 = std::max(max_dr2, (__pos - particle_list[p].pos).Norm2());
+            }
+        } else {
+            // if point is outside the entire box, use the min distance to box boundary
+            for (int d = 0; d < D; d++) {
+                double dx = MaxOf(root_center[d]-half_width - __pos[d], 0.0, __pos[d] - root_center[d] - half_width);
+                max_dr2 += dx * dx;
+            }
+        }
+        
+        double max_dr = sqrt(max_dr2);
+        // now use the distance guess to proceed
+        do {
+            ClearHeaps();
+            heaps.reserve(knn);
+            TraverseKNN(__pos, root, max_dr, knn);
+            max_dr2 *= 2;
+        } while (heaps.size() < knn);
+        
+        // Phil did TraverseKNN once more, but I don't see the necessity...
+        
+        // get original particle id
+        for (int i = 0; i != heaps.size(); i++) {
+            indices[i] = particle_list[heaps[i].first].id;
+        }
+        radius_knn = sqrt(heaps.front().second);
+    }
+    
+    /*! \fn void RecursiveBallSearch(const dvec __pos, int node, const double radius, int *indices, int &count)
+     *  \brief do recursive ball search to traverse the tree */
+    void RecursiveBallSearch(const dvec __pos, int node, const double radius, int *indices, int &count) {
+        if (SphereNodeIntersect(__pos, radius, node)) {
+            if (IsLeaf(node)) {
+                for (int p = tree[node].begin; p != tree[node].end; p++) {
+                    if ((__pos - particle_list[p].pos).Norm2() <= radius * radius) {
+                        indices[count++] = p;
+                    }
+                }
+            } else {
+                for (int d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+                    RecursiveBallSearch(__pos, d, radius, indices, count);
+                }
+            }
+        }
+    }
+    
+    /*! \fn void BallSearch(const dvec __center, const double radius, int *indices, int &count)
+     *  \brief perform a search within a sphere */
+    void BallSearch (const dvec __center, const double radius, int *indices, int &count) {
+        count = 0;
+        RecursiveBallSearch(__center, root, radius, indices, count);
+        // convert morton key to original particle id
+        for (int i = 0; i < count; i++) {
+            indices[i] = particle_list[indices[i]].id;
+        }
+    }
     
     
     

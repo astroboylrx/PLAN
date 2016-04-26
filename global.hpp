@@ -26,21 +26,27 @@
 #include <bitset>
 #include <iomanip>
 #include <numeric>
+#ifndef OLDCPP
+#include <array>
+#include <type_traits>
+#endif
 // Include other libraries
 #include <unistd.h>
 #include <getopt.h>
-#define MPI_ON
-#ifdef MPI_ON
+
+//#define MPI_ON // Comment out this line before committing!!
+#ifdef MPI_ON // Only enable these options during compilation
 #include "mpi.h"
 #endif // MPI_ON
 
 #ifndef OLDCPP
 // Check c++11 support
 #if __cplusplus <= 199711L
-#error This program needs at least a C++11 compliant compiler (or define OLDCPP as an expedient).
+#error This program needs at least a C++11 compliant compiler (or define OLDCPP as an expedient, which is not guaranteed to work so far).
 #endif // __cplusplus
 #else // OLDCPP
-#define nullptr NULL
+// In C++, use const instead of defining macros as constants
+const void *nullptr = NULL;
 #endif // OLDCPP
 
 
@@ -88,7 +94,8 @@ public:
 };
 
 /*! \class IO_Operations
- *  \brief Handle all the [file] I/O operations */
+ *  \brief Handle all the [file] I/O operations
+ *  PS: reading method for lis files is in ParticleSet class */
 class IO_Operations {
 private:
     
@@ -193,6 +200,69 @@ extern IO_Operations *io_ops;
 /********** Utility Part **********/
 /**********************************/
 
+/*! \class MPI_Wrapper
+ *  \brief served as wrappers of MPI routines plus related variables
+ *  Note that even if running as a serial program, this still works since MPI_Wrapper takes care of it. The goal of this encapsulation is to reduce the use of (annoying) "#ifdef MPI_ON" in main function. */
+class MPI_Wrapper {
+private:
+    
+public:
+    /*! \var int num_proc
+     *  \brief number of processors */
+    int num_proc;
+    
+    /*! \var int rank, master
+     *  \brief rank of this cpu / master cpu */
+    int myrank, master;
+    
+    /*! \var int loop_begin, loop_end, loop_step
+     *  \brief begin/end/step of the file loop handled by this cpu */
+    int loop_begin, loop_end, loop_step;
+    
+#ifdef MPI_ON
+    /*! \var MPI::Intracomm world
+     *  \brief a wrapper of MPI::COMM_WORLD */
+    MPI::Intracomm world;
+    
+    /*! \var MPI::Status status
+     *  \brief status used in MPI::COMM_WORLD.Recv function */
+    MPI::Status status;
+#endif // MPI_ON
+    
+    /*! \fn MPI_Wrapper()
+     *  \brief constructor */
+    MPI_Wrapper();
+    
+    /*! \fn void Initialization(int argc, const char * argv[])
+     *  \brief MPI initializaion */
+    void Initialization(int argc, const char * argv[]);
+    
+    /*! \fn void Determine_Loop(int num_file)
+     *  \brief determine the begin/end/step for file loop */
+    void DetermineLoop(int num_file);
+    
+    /*! \fn int Barrier()
+     *  \brief a wrapper of MPI::COMM_WORLD.Barrier */
+    void Barrier();
+    
+    /*! \fn int Finalize()
+     *  \brief a wrapper of MPI::Finalize */
+    void Finalize();
+    
+    /*! \fn std::string RankInfo()
+     *  \brief return a string contains "Processor myrank: " */
+    std::string RankInfo();
+    
+    /*! \fn ~MPI_Wrapper()
+     *  \brief destructor */
+    ~MPI_Wrapper();
+    
+};
+
+/*! \var extern MPI_Wrapper *mpi
+ *  \brief declaration of gloal MPI wrapper */
+extern MPI_Wrapper *mpi;
+
 /*! \class Timer
  *  \brief served as timer */
 class Timer {
@@ -269,78 +339,32 @@ enum TimeTypeIndex {
     __time_type_count             /*!< the number of time type */
 };
 
-#ifdef MPI_ON
-/*! \class MPI_Wrapper
- *  \brief served as wrappers of MPI routines plus related variables */
-class MPI_Wrapper {
-private:
-    
-public:
-    /*! \var int num_proc
-     *  \brief number of processors */
-    int num_proc;
-    
-    /*! \var int rank, master
-     *  \brief rank of this cpu / master cpu */
-    int myrank, master;
-    
-    /*! \var int loop_begin, loop_end, loop_step
-     *  \brief begin/end/step of the file loop handled by this cpu */
-    int loop_begin, loop_end, loop_step;
-    
-    /*! \var std::vector<Timer> timer
-     *  \brief used for recording time usage */
-    std::vector<Timer> timer;
-    
-    /*! \var MPI::Intracomm world
-     *  \brief a wrapper of MPI::COMM_WORLD */
-    MPI::Intracomm world;
-    
-    /*! \var MPI::Status status
-     *  \brief status used in MPI::COMM_WORLD.Recv function */
-    MPI::Status status;
-    
-    /*! \fn MPI_Wrapper()
-     *  \brief constructor */
-    MPI_Wrapper();
-    
-    /*! \fn void Initialization(int argc, const char * argv[])
-     *  \brief MPI initializaion */
-    void Initialization(int argc, const char * argv[]);
-    
-    /*! \fn void Determine_Loop(int num_file)
-     *  \brief determine the begin/end/step for file loop */
-    void DetermineLoop(int num_file);
-    
-    /*! \fn int Barrier()
-     *  \brief a wrapper of MPI::COMM_WORLD.Barrier */
-    void Barrier();
-    
-    /*! \fn double Wtime()
-     *  \brief a wrapper of MPI::Wtime */
-    double Wtime();
-    
-    /*! \fn int Finalize()
-     *  \brief a wrapper of MPI::Finalize */
-    void Finalize();
-    
-    /*! \fn std::string RankInfo()
-     *  \brief return a string contains "Processor myrank: " */
-    std::string RankInfo();
-    
-    /*! \fn ~MPI_Wrapper()
-     *  \brief destructor */
-    ~MPI_Wrapper();
-    
-};
+/*! \fn template <typename T> T MaxOf(const T &a, const T &b)
+ *  \brief return the larger one of a and b */
+template <typename T>
+T MaxOf(const T &a, const T &b) {
+    return std::max(a, b);
+}
 
-/*! \var extern MPI_Wrapper *mpi
- *  \brief declaration of gloal MPI wrapper */
-extern MPI_Wrapper *mpi;
+/*! \fn template <typename T, typename... Args> T MaxOf(const T &a, const T &b, Args... args)
+ *  \brief return the maximum one in a list, downgrade to MaxOf(a, b) */
+template <typename T, typename... Args>
+T MaxOf(const T &a, const T &b, Args... args) {
+    return MaxOf(std::max(a, b), args...);
+}
 
-#endif // MPI_ON
+/*! \fn template <typename T> T MinOf(const T &a, const T &b)
+ *  \brief return the smaller one of a and b */
+template <typename T>
+T MinOf(const T &a, const T &b) {
+    return std::min(a, b);
+}
 
-
-
+/*! \fn template <typename T, typename... Args> T MinOf(const T &a, const T &b, Args... args)
+ *  \brief return the minimum one in a list, downgrade to MaxOf(a, b) */
+template <typename T, typename... Args>
+T MinOf(const T &a, const T &b, Args... args) {
+    return MaxOf(std::min(a, b), args...);
+}
 
 #endif /* global_hpp */

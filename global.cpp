@@ -270,8 +270,8 @@ void IO_Operations::GenerateFilenames()
         
         file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
         log_info << file_name.lis_data_file_name.back() << "\n";
-        for (int id = 0; id != num_cpu; id++) {
-            file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"-id"+std::to_string(id+1)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
+        for (int id = 1; id != num_cpu; id++) {
+            file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id"+std::to_string(id)+"/"+file_name.data_file_basename+"-id"+std::to_string(id)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
         }
         log_info << file_name.lis_data_file_name.back() << "\n";
     }
@@ -283,6 +283,93 @@ void IO_Operations::GenerateFilenames()
 /*! \fn ~~IO_Operations()
  *  \brief destructor */
 IO_Operations::~IO_Operations()
+{
+    ;
+}
+
+/*********************************/
+/********** MPI_Wrapper **********/
+/*********************************/
+
+/*! \fn MPI_Wrapper()
+ *  \brief constructor */
+MPI_Wrapper::MPI_Wrapper()
+{
+    ;
+}
+
+/*! \fn void Initialize(int argc, const char * argv[])
+ *  \brief MPI initializaion */
+void MPI_Wrapper::Initialization(int argc, const char * argv[])
+{
+#ifdef MPI_ON
+    // common initialization of MPI
+    MPI::Init(argc, (char **&)argv);
+    world = MPI::COMM_WORLD;
+    num_proc = world.Get_size();
+    myrank = world.Get_rank();
+#else // MPI_ON
+    num_proc = 1;
+    myrank = 0;
+#endif // MPI_ON
+    master = 0;
+    // initialize file loop's parameters
+    loop_begin = myrank;
+    loop_end = myrank;
+    loop_step = num_proc;
+}
+
+/*! \fn void Determine_Loop(int num_file)
+ *  \brief determine the begin/end/offset for file loop */
+void MPI_Wrapper::DetermineLoop(int num_file)
+{
+    if (num_file < num_proc) {
+        if (myrank > num_file - 1) {
+            loop_end = -1;
+        }
+        loop_step = 1;
+    } else {
+        // in order to let master processor become available
+        // in fact, no special effect, just for future dev
+        loop_begin = num_proc - 1 - myrank;
+        loop_end = num_file - 1;
+    }
+}
+
+/*! \fn void Barrier()
+ *  \brief a wrapper of MPI Barrier */
+void MPI_Wrapper::Barrier()
+{
+#ifdef MPI_ON
+    world.Barrier();
+#endif // MPI_ON
+}
+
+/*! \fn std::string RankInfo()
+ *  \brief return a string contains "Processor myrank: " */
+std::string MPI_Wrapper::RankInfo()
+{
+#ifdef MPI_ON
+    std::ostringstream oss;
+    oss << "Processor " << myrank << ": ";
+    return oss.str();
+#else // MPI_ON
+    return std::string();
+#endif // MPI_ON
+}
+
+/*! \fn void Finalize()
+ *  \brief a wrapper of MPI Finalize() */
+void MPI_Wrapper::Finalize()
+{
+#ifdef MPI_ON
+    MPI::Finalize();
+#endif // MPI_ON
+}
+
+/*! \fn ~MPI_info()
+ *  \brief a destructor */
+MPI_Wrapper::~MPI_Wrapper()
 {
     ;
 }
@@ -304,7 +391,7 @@ Timer::Timer()
 double Timer::GetCurrentTime()
 {
 #ifdef MPI_ON
-    return mpi->Wtime();
+    return MPI::Wtime();
 #else // MPI_ON
     return double(clock())/CLOCKS_PER_SEC;
 #endif // MPI_ON
@@ -380,90 +467,3 @@ Timer::~Timer()
     std::vector<double> TempVector;
     lap_time.swap(TempVector);
 }
-
-/*********************************/
-/********** MPI_Wrapper **********/
-/*********************************/
-
-#ifdef MPI_ON
-
-/*! \fn MPI_Wrapper()
- *  \brief constructor */
-MPI_Wrapper::MPI_Wrapper()
-{
-    ;
-}
-
-/*! \fn void Initialize(int argc, const char * argv[])
- *  \brief MPI initializaion */
-void MPI_Wrapper::Initialization(int argc, const char * argv[])
-{
-    // common initialization of MPI
-    MPI::Init(argc, (char **&)argv);
-    world = MPI::COMM_WORLD;
-    num_proc = world.Get_size();
-    myrank = world.Get_rank();
-    master = 0;
-    
-    // initialize file loop's parameters
-    loop_begin = myrank;
-    loop_end = myrank;
-    loop_step = num_proc;
-}
-
-/*! \fn void Determine_Loop(int num_file)
- *  \brief determine the begin/end/offset for file loop */
-void MPI_Wrapper::DetermineLoop(int num_file)
-{
-    if (num_file < num_proc) {
-        if (myrank > num_file - 1) {
-            loop_end = -1;
-        }
-        loop_step = 1;
-    } else {
-        // in order to let master processor become available
-        // in fact, no special effect, just for future dev
-        loop_begin = num_proc - 1 - myrank;
-        loop_end = num_file - 1;
-    }
-}
-
-/*! \fn void Barrier()
- *  \brief a wrapper of MPI Barrier */
-void MPI_Wrapper::Barrier()
-{
-    world.Barrier();
-}
-
-/*! \fn double Wtime()
- *  \brief a wrapper of MPI Wtime */
-double MPI_Wrapper::Wtime()
-{
-    return MPI::Wtime();
-}
-
-/*! \fn std::string RankInfo()
- *  \brief return a string contains "Processor myrank: " */
-std::string MPI_Wrapper::RankInfo()
-{
-    std::ostringstream oss;
-    oss << "Processor " << myrank << ": ";
-    return oss.str();
-}
-
-/*! \fn void Finalize()
- *  \brief a wrapper of MPI Finalize() */
-void MPI_Wrapper::Finalize()
-{
-    MPI::Finalize();
-}
-
-/*! \fn ~MPI_info()
- *  \brief a destructor */
-MPI_Wrapper::~MPI_Wrapper()
-{
-    ;
-}
-
-#endif // MPI_ON
-
