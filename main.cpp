@@ -20,9 +20,9 @@ MPI_Wrapper *mpi = new MPI_Wrapper;
  *  \brief global timer */
 std::vector<Timer> timer(__time_type_count);
 
-/*! \var FileOperation *io_ops
- *  \brief global class handle all I/O stuff */
-IO_Operations *io_ops = new IO_Operations;
+/*! \var FileOperation *progIO
+ *  \brief Handle command line and most of I/O functions together with MPI_Wrapper */
+Basic_IO_Operations *progIO = new Basic_IO_Operations;
 
 /*! \var const int dim = 3
  *  \brief dimension of simulation */
@@ -36,25 +36,27 @@ int main(int argc, const char * argv[])
     mpi->Initialization(argc, argv);
     timer[__total_elapse_time].StartTimer();
     
-    io_ops->log_info << "Program begins now.\n";
-    io_ops->Output(std::clog, io_ops->log_info, io_ops->__normal_output, io_ops->__master_only);
-    io_ops->PrintStars(std::clog, io_ops->__normal_output);
+    progIO->log_info << "Program begins now.\n";
+    progIO->Output(std::clog, progIO->log_info, __normal_output, __master_only);
+    progIO->PrintStars(std::clog, __normal_output);
     
-    io_ops->Initialize(argc, argv);
-    mpi->DetermineLoop(io_ops->num_file);
+    progIO->Initialize(argc, argv);
+    mpi->DetermineLoop(progIO->num_file);
     
     ParticleSet<dim> particle_set;
     BHtree<dim> tree;
+    const SmallVec<double, 3> __center(0.0, 0.0, 0.0); // default center
     
     /********** Step II: Pre-loop Work **********/
-    std::vector<std::string>::iterator file_head = io_ops->file_name.lis_data_file_name.begin();
+    
     
     /********** Step III: Loop files, read data and process it **********/
     for (int loop_count = mpi->loop_begin; loop_count <= mpi->loop_end; loop_count += mpi->loop_step) {
         /***** Step III-A, read data from lis files *****/
         
-        particle_set.ReadLisFile(file_head + loop_count * io_ops->num_cpu,
-                                 file_head + loop_count * io_ops->num_cpu + io_ops->num_cpu);
+        particle_set.ReadLisFile(loop_count);
+        tree.BuildTree(__center, 0.1, particle_set, 8);
+        
         
     }
 
@@ -62,12 +64,12 @@ int main(int argc, const char * argv[])
     
     
     
-    io_ops->PrintStars(std::clog, io_ops->__normal_output);
+    progIO->PrintStars(std::clog, __normal_output);
     /********** Step IV: Post-loop Work **********/
     timer[__total_elapse_time].StopTimer();
-    io_ops->log_info << "Program ends now. Elapsed time: " << timer[__total_elapse_time].GiveTime() << "\n";
-    io_ops->PrintStars(std::clog, io_ops->__normal_output);
-    io_ops->Output(std::clog, io_ops->log_info, io_ops->__normal_output, io_ops->__master_only);
+    progIO->log_info << "Program ends now. Elapsed time: " << timer[__total_elapse_time].GiveTime() << "\n";
+    progIO->PrintStars(std::clog, __normal_output);
+    progIO->Output(std::clog, progIO->log_info, __normal_output, __master_only);
     
     mpi->Finalize();
 

@@ -1,8 +1,8 @@
 //
 //  global.hpp
-//  PLATO: PLAneTesimal locatOr
+//  PLAN: PLantesimal ANalyzer (a better version of project PLATO)
 //
-//  Created by Rixin Li on 3/10/16.
+//  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
 //
 
@@ -34,7 +34,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-//#define MPI_ON // Comment out this line before committing!!
+#define MPI_ON // Comment out this line before committing!!
 #ifdef MPI_ON // Only enable these options during compilation
 #include "mpi.h"
 #endif // MPI_ON
@@ -50,9 +50,9 @@ const void *nullptr = NULL;
 #endif // OLDCPP
 
 
-/******************************/
-/********** I/O Part **********/
-/******************************/
+/*********************************************/
+/**********Basic_IO_Operations Part **********/
+/*********************************************/
 
 /*! \class IO_FileName
  *  \brief contains all I/O-related file path & names
@@ -93,16 +93,83 @@ public:
     
 };
 
-/*! \class IO_Operations
- *  \brief Handle all the [file] I/O operations
+/*! \class PhysicalQuantities
+ *  \brief all physical quantities that might needed to be calculated */
+class PhysicalQuantities {
+public:
+    /*! \var float time;
+     *  \brief simulation time */
+    float time;
+    
+    /*! \var float dt;
+     *  \brief simulation time */
+    float dt;
+    
+    /*! \var std::vector<double> particle_scale_height;
+     *  \brief particle scale height for all particle sizes */
+    std::vector<double> particle_scale_height;
+    
+    /*! \var double max_particle_density
+     *  \brief maximum particle density: $\rho_p$ */
+    float max_particle_density {0.0};
+};
+
+/*! \enum OutputLevel
+ *  \brief served as output_level in Output() */
+enum OutputLevel {
+    // put two underscore at first to avoid possbile name conflict
+    __normal_output = 0,        /*!< only basic output */
+    __more_output,              /*!< print more info for debugging */
+    __even_more_output          /*!< give all possible info */
+};
+
+/*! \enum MPI_Level
+ *  \brief served as mpi_level in Output() */
+enum MPI_Level {
+    // put two underscore at first to avoid possbile name conflict
+    __master_only = 0,          /*!< only master processor prints */
+    __all_processors            /*!< all processors speak */
+};
+
+/*! \class IO_Flags
+ *  \brief all possible flags used in executation */
+class IO_Flags {
+public:
+    /*! \var int debug_flag
+     *  \brief set this flag to make log_level = 2 */
+    int debug_flag {0};
+    
+    /*! \var int verbose_flag
+     *  \brief set this flag to make log_level = 1 */
+    int verbose_flag {0};
+    
+    /*! \var int combined_flag
+     *  \brief set this flag to read combined data */
+    int combined_flag {0};
+    
+};
+
+/*! \class Basic_IO_Operations
+ *  \brief Handle command line and most of I/O functions together with MPI_Wrapper
  *  PS: reading method for lis files is in ParticleSet class */
-class IO_Operations {
+class Basic_IO_Operations {
 private:
+    /*! \var int ostream_level
+     *  \brief set level for different amount of output */
+    int ostream_level {__normal_output};
     
 public:
     /*! \var IO_FileName file_name
      *  \brief all I/O-related file path & names */
     IO_FileName file_name;
+    
+    /*! \var std::vector<PhysicalQuantities> physical_quantities;
+     *  \brief all physical quantities that might needed to be calculated */
+    std::vector<PhysicalQuantities> physical_quantities;
+    
+    /*! \var IO_Flags flags
+     *  \brief all possible flags used in executation */
+    IO_Flags flags;
     
     /*! \var std::ostringstream out_content
      *  \brief this stores the content to output */
@@ -116,14 +183,6 @@ public:
      *  \brief this stores any temporary error message */
     std::ostringstream error_message;
     
-    /*! \var int ostream_level
-     *  \brief set level for different amount of output */
-    int ostream_level;
-    
-    /*! \var int debug_flag
-     *  \brief set this flag to make log_level = 2 */
-    int debug_flag;
-        
     /*! \var int start_num, end_num, interval
      *  \brief start/end number and interval fo the entir file loop */
     int start_num, end_num, interval;
@@ -136,36 +195,23 @@ public:
      *  \brief the number of processors used in simulation */
     int num_cpu;
     
-    /*! \var int high_log_level_flag;
-     *  \brief set this flag to obtain detailed running log */
-    int high_log_level_flag;
+    /*! \var int width {15}
+     *  \brief set default width of one data unit */
+    int width {15};
     
-    /*! \enum OutputLevel
-     *  \brief served as output_level in Output() */
-    enum OutputLevel {
-        // put two underscore at first to avoid possbile name conflict
-        __normal_output = 0,        /*!< only basic output */
-        __more_output,              /*!< print more info for debugging */
-        __even_more_output          /*!< give all possible info */
-    };
+    /*! \var int column {4}
+     *  \brief data column in result file */
+    int column {2};
     
-    /*! \enum MPI_Level
-     *  \brief served as mpi_level in Output() */
-    enum MPI_Level {
-        // put two underscore at first to avoid possbile name conflict
-        __master_only = 0,          /*!< only master processor prints */
-        __all_processors            /*!< all processors speak */
-    };
-    
-    /*! \fn FileOperation()
+    /*! \fn Basic_IO_Operations()
      *  \brief constructor */
-    IO_Operations();
+    Basic_IO_Operations();
     
     /*! \fn int Initialization(int argc, const char * argv[])
      *  \brief initialization */
     int Initialize(int argc, const char * argv[]);
     
-    /*! \fn void Output(std::ostream &stream, std::ostringstream &content, OutputLevel &output_level, MPI_Level &mpi_level)
+    /*! \fn void Output(std::ostream &stream, std::ostringstream &content, const OutputLevel &output_level, const MPI_Level &mpi_level)
      *  \brief handle output by log level & MPI status */
     void Output(std::ostream &stream, std::ostringstream &content, const OutputLevel &output_level, const MPI_Level &mpi_level);
     
@@ -181,20 +227,22 @@ public:
      *  \brief generate the name of data files for processing */
     void GenerateFilenames();
     
+    /*! \fn inline void Reset(std::ostringstream &content)
+     *  \brief reset the content of ostringstream */
+    inline void Reset(std::ostringstream &content) {
+        content.str(std::string());
+        content.clear();
+        //std::ostringstream().swap(content); // sometimes need c++14
+    }
     
-    
-    /*! \fn void WriteResults()
-     *  \brief write calculation results into files */
-    void WriteResults();
-    
-    /*! \fn ~~IO_Operations()
+    /*! \fn ~Basic_IO_Operations()
      *  \brief destructor */
-    ~IO_Operations();
+    ~Basic_IO_Operations();
 };
 
-/*! \var FileOperation *io_ops
- *  \brief global class handle all I/O stuff */
-extern IO_Operations *io_ops;
+/*! \var FileOperation *progIO
+ *  \brief Handle command line and most of I/O functions together with MPI_Wrapper */
+extern Basic_IO_Operations *progIO;
 
 /**********************************/
 /********** Utility Part **********/
@@ -220,14 +268,41 @@ public:
     int loop_begin, loop_end, loop_step;
     
 #ifdef MPI_ON
-    /*! \var MPI::Intracomm world
-     *  \brief a wrapper of MPI::COMM_WORLD */
-    MPI::Intracomm world;
+    /*! \var MPI_Comm world
+     *  \brief a wrapper of MPI_COMM_WORLD */
+    MPI_Comm world;
     
-    /*! \var MPI::Status status
-     *  \brief status used in MPI::COMM_WORLD.Recv function */
-    MPI::Status status;
+    /*! \var MPI_Status status
+     *  \brief MPI status */
+    MPI_Status status;
+    
+    /*! \var MPI_Offset offset
+     *  \brief stream offset used during parallel file I/O */
+    MPI_Offset offset {0};
+    
+    /*! \var MPI_Offset header_offset
+     *  \brief stream offset used during parallel file I/O */
+    MPI_Offset header_offset {0};
+    
+#ifdef OLDCPP
+    typedef MPI_File file_obj;
+#else // OLDCPP
+    using file_obj = MPI_File;
+#endif // OLDCPP
+    
+#else // MPI_ON
+    
+#ifdef OLDCPP
+    typedef std::ofstream file_obj
+#else // OLDCPP
+    using file_obj = std::ofstream;
+#endif // OLDCPP
+    
 #endif // MPI_ON
+    
+    /*! \var file_obj result_file
+     *  \brief default file to output result */
+    file_obj result_file;
     
     /*! \fn MPI_Wrapper()
      *  \brief constructor */
@@ -242,16 +317,33 @@ public:
     void DetermineLoop(int num_file);
     
     /*! \fn int Barrier()
-     *  \brief a wrapper of MPI::COMM_WORLD.Barrier */
+     *  \brief a wrapper of MPI_Barrier */
     void Barrier();
     
     /*! \fn int Finalize()
-     *  \brief a wrapper of MPI::Finalize */
+     *  \brief a wrapper of MPI_Finalize */
     void Finalize();
     
     /*! \fn std::string RankInfo()
      *  \brief return a string contains "Processor myrank: " */
     std::string RankInfo();
+    
+    /*! \fn void OpenFile(file_obj &__file, std::string filename)
+     *  \brief open file */
+    void OpenFile(file_obj &__file, std::string file_name);
+    
+    /*! \fn void WriteSingleFile(file_obj &__file, std::ostringstream &content)
+     *  \brief all processor write into a file, use with cautions -> read the assumptions in descriptions
+     *  When MPI_ON is on, this function assumes that you only write file header if specifying __master_only, and it assumes that every processor are writing the same amout of chunk into the file every time */
+    void WriteSingleFile(file_obj &__file, std::ostringstream &content, const MPI_Level &mpi_level);
+    
+    /*! \fn void WriteItsOwnFile(file_obj &__file, std::ostringstream &content)
+     *  \brief all processor write to its own file */
+    void WriteItsOwnFile(file_obj &__file, std::ostringstream &content);
+    
+    /*! \fn void CloseFile(file_obj &__file)
+     *  \brief close the file */
+    void CloseFile(file_obj &__file);
     
     /*! \fn ~MPI_Wrapper()
      *  \brief destructor */

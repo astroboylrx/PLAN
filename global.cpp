@@ -1,47 +1,38 @@
 //
 //  global.cpp
-//  PLATO: PLAneTesimal locatOr
+//  PLAN: PLantesimal ANalyzer (a better version of project PLATO)
 //
-//  Created by Rixin Li on 3/10/16.
+//  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
 //
 
 #include "global.hpp"
 
 
-/***********************************/
-/********** IO_Operations **********/
-/***********************************/
+/*****************************************/
+/********** Basic_IO_Operations **********/
+/*****************************************/
 
-/*! \fn IO_Operations()
+/*! \fn Basic_IO_Operations()
  *  \brief constructor */
-IO_Operations::IO_Operations()
+Basic_IO_Operations::Basic_IO_Operations()
 {
-    // default log level is 0
-    ostream_level = __normal_output;
-    // can be changed by options during compilation
-#ifdef MORE_OUTPUT
-    ostream_level = __more_output;
-#endif
-#ifdef EVEN_MORE_OUTPUT
-    // alternative, set debug_flag to achieve this
-    ostream_level = __even_more_output;
-#endif
+    ;
 }
 
 /*! \fn int Initialize(int argc, const char * argv[])
  *  \brief initialization */
-int IO_Operations::Initialize(int argc, const char * argv[])
+int Basic_IO_Operations::Initialize(int argc, const char * argv[])
 {
     // the following manipulation of command line options is from getopb.h
     // an alternative choice is boost library: Boost.Program_options
     
-    // set all flags to 0 at first
-    debug_flag = 0;
     //Specifying the expected options
     static struct option long_options[] = {
         // These options set a flag
-        {"Debug", no_argument, &debug_flag, 1},
+        {"Debug", no_argument, &flags.debug_flag, 1},
+        {"Verbose", no_argument, &flags.verbose_flag, 1},
+        {"Combined", no_argument, &flags.combined_flag, 1},
         // These options don't set a flag
         {"num_cpu", required_argument, 0, 'c'},
         {"data_dir", required_argument, 0, 'i'},
@@ -189,9 +180,14 @@ int IO_Operations::Initialize(int argc, const char * argv[])
             }
         }
         
-        if (debug_flag) {
+        // determine ostream level before first Output()
+        if (flags.verbose_flag) {
+            ostream_level = __more_output;
+        }
+        if (flags.debug_flag) {
             ostream_level = __even_more_output;
         }
+        
         Output(std::clog, log_info, __more_output, __master_only);
         PrintStars(std::clog, __more_output);
         if (optind < argc) {
@@ -204,6 +200,7 @@ int IO_Operations::Initialize(int argc, const char * argv[])
         }
     } // if (argc < 13)
     
+    physical_quantities.resize(num_file);
     GenerateFilenames();
     
     return 0;
@@ -211,16 +208,22 @@ int IO_Operations::Initialize(int argc, const char * argv[])
 
 /*! \fn void PrintUsage(const char *program_name)
  *  \brief print usage if required argument is missing */
-void IO_Operations::PrintUsage(const char *program_name)
+void Basic_IO_Operations::PrintUsage(const char *program_name)
 {
-    out_content << "USAGE: " << program_name << " -c <num_cpu> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [flags]\n" << "Example: ./plato -c 64 -i ./ -b Par_Strat3d -p ds -f 170:227 -o result.txt\n" << "Use --Debug to obtain more information during executation.";
+    out_content << "USAGE: " << program_name
+    << " -c <num_cpu> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [flags]\n"
+    << "Example: ./plato -c 64 -i ./ -b Par_Strat3d -p ds -f 170:227 -o result.txt\n"
+    << "Use --Verbose to obtain more output during executation"
+    << "Use --Debug to obtain all possbile output during executation"
+    << "Use --Combined to deal with combined lis files (from all processors";
+    out_content << std::endl;
     Output(std::cout, out_content, __normal_output, __master_only);
     exit(2); // cannot execute
 }
 
 /*! \fn void Output(std::ostream &stream, std::ostringstream &content, const OutputLevel &output_level, const MPI_Level &mpi_level)
  *  \brief handle output by log level & MPI status */
-void IO_Operations::Output(std::ostream &stream, std::ostringstream &content, const OutputLevel &output_level, const MPI_Level &mpi_level)
+void Basic_IO_Operations::Output(std::ostream &stream, std::ostringstream &content, const OutputLevel &output_level, const MPI_Level &mpi_level)
 {
     if (ostream_level >= output_level) {
 #ifdef MPI_ON
@@ -247,7 +250,7 @@ void IO_Operations::Output(std::ostream &stream, std::ostringstream &content, co
 
 /*! \fn void PrintStars(std::ostream &stream, const OutputLevel &output_level)
  *  \brief print 80 * symbols as a divider line */
-void IO_Operations::PrintStars(std::ostream &stream, const OutputLevel &output_level)
+void Basic_IO_Operations::PrintStars(std::ostream &stream, const OutputLevel &output_level)
 {
     out_content << std::setw(80) << std::setfill('*') << "*\n";
     Output(stream, out_content, output_level, __master_only);
@@ -255,34 +258,51 @@ void IO_Operations::PrintStars(std::ostream &stream, const OutputLevel &output_l
 
 /*! \fn void GenerateFilenames()
  *  \brief generate the name of data files for processing */
-void IO_Operations::GenerateFilenames()
+void Basic_IO_Operations::GenerateFilenames()
 {
     if (*file_name.data_file_dir.rbegin() != '/') {
         file_name.data_file_dir.push_back('/');
     }
     
-    file_name.lis_data_file_name.reserve(num_file * num_cpu);
-    log_info << "Verifying generated data file names (only id0 and id[max]):\n";
-    
-    for (int num = start_num; num != end_num+1; num += interval) {
-        std::stringstream formatted_num;
-        formatted_num << std::setw(4) << std::setfill('0') << num;
+    if (flags.combined_flag) {
+        file_name.lis_data_file_name.reserve(num_file);
+        log_info << "Verifying generated data file names (only the first one and last one):\n";
         
-        file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
-        log_info << file_name.lis_data_file_name.back() << "\n";
-        for (int id = 1; id != num_cpu; id++) {
-            file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id"+std::to_string(id)+"/"+file_name.data_file_basename+"-id"+std::to_string(id)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
+        for (int num = start_num; num != end_num+1; num += interval) {
+            std::stringstream formatted_num;
+            formatted_num << std::setw(4) << std::setfill('0') << num;
+            
+            file_name.lis_data_file_name.push_back(file_name.data_file_dir+file_name.data_file_basename+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
+            if (num == start_num || num == end_num) {
+                log_info << file_name.lis_data_file_name.back() << "\n";
+            }
         }
-        log_info << file_name.lis_data_file_name.back() << "\n";
+        
+    } else {
+        file_name.lis_data_file_name.reserve(num_file * num_cpu);
+        log_info << "Verifying generated data file names (only id0 and id[max]):\n";
+        
+        for (int num = start_num; num != end_num+1; num += interval) {
+            std::stringstream formatted_num;
+            formatted_num << std::setw(4) << std::setfill('0') << num;
+            
+            file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id0/"+file_name.data_file_basename+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
+            log_info << file_name.lis_data_file_name.back() << "\n";
+            for (int id = 1; id != num_cpu; id++) {
+                file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id"+std::to_string(id)+"/"+file_name.data_file_basename+"-id"+std::to_string(id)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
+            }
+            log_info << file_name.lis_data_file_name.back() << "\n";
+        }
     }
+    
     Output(std::clog, log_info, __even_more_output, __master_only);
     PrintStars(std::clog, __even_more_output);
     
 }
 
-/*! \fn ~~IO_Operations()
+/*! \fn ~Basic_IO_Operations()
  *  \brief destructor */
-IO_Operations::~IO_Operations()
+Basic_IO_Operations::~Basic_IO_Operations()
 {
     ;
 }
@@ -304,10 +324,10 @@ void MPI_Wrapper::Initialization(int argc, const char * argv[])
 {
 #ifdef MPI_ON
     // common initialization of MPI
-    MPI::Init(argc, (char **&)argv);
-    world = MPI::COMM_WORLD;
-    num_proc = world.Get_size();
-    myrank = world.Get_rank();
+    MPI_Init(&argc, (char***)&argv);
+    world = MPI_COMM_WORLD;
+    MPI_Comm_size(world, &num_proc);
+    MPI_Comm_rank(world, &myrank);
 #else // MPI_ON
     num_proc = 1;
     myrank = 0;
@@ -323,16 +343,11 @@ void MPI_Wrapper::Initialization(int argc, const char * argv[])
  *  \brief determine the begin/end/offset for file loop */
 void MPI_Wrapper::DetermineLoop(int num_file)
 {
-    if (num_file < num_proc) {
-        if (myrank > num_file - 1) {
-            loop_end = -1;
-        }
-        loop_step = 1;
-    } else {
-        // in order to let master processor become available
-        // in fact, no special effect, just for future dev
-        loop_begin = num_proc - 1 - myrank;
-        loop_end = num_file - 1;
+    // use reverse order
+    loop_begin = num_proc - 1 - myrank;
+    loop_end = num_file - 1;
+    if (loop_begin >= num_proc) {
+        loop_end = -1;
     }
 }
 
@@ -341,7 +356,7 @@ void MPI_Wrapper::DetermineLoop(int num_file)
 void MPI_Wrapper::Barrier()
 {
 #ifdef MPI_ON
-    world.Barrier();
+    MPI_Barrier(world);
 #endif // MPI_ON
 }
 
@@ -363,7 +378,77 @@ std::string MPI_Wrapper::RankInfo()
 void MPI_Wrapper::Finalize()
 {
 #ifdef MPI_ON
-    MPI::Finalize();
+    MPI_Finalize();
+#endif // MPI_ON
+}
+
+/*! \fn void OpenFile(file_obj &__file, std::string filename)
+ *  \brief open file for data writing */
+void MPI_Wrapper::OpenFile(file_obj &__file, std::string file_name)
+{
+#ifdef MPI_ON
+    if (!MPI_File_open(world, file_name.c_str(), MPI_MODE_CREATE|MPI_MODE_WRONLY, MPI_INFO_NULL, &__file)) {
+        if (__file == MPI::FILE_NULL) {
+            progIO->error_message << "Error: Failed to open file " << file_name << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+            exit(3); // cannot open file
+        }
+    }
+#else // MPI_ON
+    __file.open(file_name.c_str(), std::ofstream::out);
+    if (!__file.is_open()) {
+        progIO->error_message << "Error: Failed to open file " << file_name << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        exit(3); // cannot open file
+    }
+#endif // MPI_ON
+}
+
+/*! \fn void WriteFile(file_obj &__file, std::ostringstream &content, const int loop_count)
+ *  \brief all processor write into a file, use with cautions -> read the assumptions in descriptions
+ *  When MPI_ON is on, this function assumes that you only write file header if specifying __master_only, and it assumes that every processor are writing the same amout of chunk into the file every time */
+void MPI_Wrapper::WriteSingleFile(file_obj &__file, std::ostringstream &content, const MPI_Level &mpi_level)
+{
+#ifdef MPI_ON
+    std::string tmp_str = content.str();
+    if (mpi_level == __master_only) {
+        header_offset = tmp_str.size();
+        MPI_Bcast(&header_offset, 1, MPI_OFFSET, master, world);
+        if (myrank == master) {
+            const char *tmp_char = tmp_str.data();
+            MPI_File_write(__file, tmp_char, static_cast<int>(tmp_str.size()), MPI::CHAR, &status);
+        } else {
+            MPI_File_seek(__file, header_offset, MPI_SEEK_SET);
+        }
+        MPI_File_sync(__file);
+    } else {
+        if (loop_end == -1) {
+            return; // this should not happen
+        }
+        MPI_File_get_position(__file, &offset);
+        if (offset == header_offset) {
+            MPI_File_seek(__file, tmp_str.size()*(loop_begin), MPI_SEEK_CUR);
+        } else {
+            MPI_File_seek(__file, tmp_str.size()*(loop_step-1), MPI_SEEK_CUR);
+        }
+        const char *tmp_char = tmp_str.data();
+        MPI_File_write(__file, tmp_char, static_cast<int>(tmp_str.size()), MPI::CHAR, &status);
+        MPI_File_sync(__file);
+    }
+#else // MPI_ON
+    __file << content.str();
+#endif // MPI_ON
+    progIO->Reset(content);
+}
+
+/*! \fn void CloseFile(file_obj &__file, )
+ *  \brief close the file for data writing */
+void MPI_Wrapper::CloseFile(file_obj &__file)
+{
+#ifdef MPI_ON
+    MPI_File_close(&__file);
+#else // MPI_ON
+    __file.close();
 #endif // MPI_ON
 }
 

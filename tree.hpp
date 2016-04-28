@@ -76,6 +76,17 @@ public:
     SmallVec() : data{0} {}
     
     
+    
+#ifdef OLDCPP
+    /*! \fn template <class U>
+     *  \brief overloading constructor to broadcast a scalar, e.g., unit_vec = SmallVec<double, 3>(1.0). For keyword "explicit", read explanations below */
+    template <class U>
+    explicit SmallVec(const U& scalar) {
+        for (int i = 0; i != D; i++) {
+            data[i] = static_cast<T>(scalar);
+        }
+    }
+#else // OLDCPP
     /*
      * Warning: I haven't fully understand the usage of enable_if
      */
@@ -102,8 +113,8 @@ public:
      *  \brief overloading constructor to notify user a wrong old-fashion array is input */
     template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0>
     explicit SmallVec(const U (&vec)[E]) { // remember how to reference an array
-        io_ops->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
-        io_ops->Output(std::cerr, io_ops->error_message, io_ops->__even_more_output, io_ops->__all_processors);
+        progIO->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
         exit(2);
     }
     
@@ -120,15 +131,15 @@ public:
      *  \brief overloading constructor to notify user a wrong STL array is input */
     template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0>
     explicit SmallVec(std::array<U, E> const &vec) {
-        io_ops->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
-        io_ops->Output(std::cerr, io_ops->error_message, io_ops->__even_more_output, io_ops->__all_processors);
+        progIO->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
         exit(2);
     }
     
     template <class U, typename std::enable_if<std::is_pointer<U>::value, int>::type = 0>
     SmallVec(U arg) {
-        io_ops->error_message << "Error: Please don't provide a pointer to construct class SmallVec. Whether it is a pointer to scalar or a pointer to array remains unknown. " << std::endl;
-        io_ops->Output(std::cerr, io_ops->error_message, io_ops->__even_more_output, io_ops->__all_processors);
+        progIO->error_message << "Error: Please don't provide a pointer to construct class SmallVec. Whether it is a pointer to scalar or a pointer to array remains unknown. " << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
         exit(2);
     }
     
@@ -146,6 +157,8 @@ public:
      * C++ has a special parameter type, ellipsis, that can be used to pass a varying number of arguments. It is called the ellipsis operator. Try to undersatnd it by recalling the usage of printf() in C where you can input any amount of arguments. Also, sizeof...() is used to count the number of arguments, which is different with sizeof()(reference: http://www.cplusplus.com/articles/EhvU7k9E/ )
      * Then "data{ head, T(tail)... }" is called an initialization list. Usually it is for passing arguments to the constructor of a parent class.
      */
+    
+#endif // OLDCPP
     
     /*! \fn T operator[] ( const size_t i ) const
      *  \brief allow access with usual vector notation */
@@ -178,6 +191,14 @@ public:
             result[i] = -data[i];
         }
         return result;
+    }
+    
+    template <class U>
+    SmallVec<T, D>& operator = (const SmallVec<U, D>& rhs) {
+        for (int i = 0; i != D; i++) {
+            data[i] = rhs.data[i];
+        }
+        return *this;
     }
     
     /*! \fn template <class U> SmallVec<T, D>& operator += (const SmallVec<U, D>& rhs)
@@ -500,13 +521,13 @@ public:
      *  \brief position vector r and velocity vector v */
     SmallVec<float, D> pos, vec;
     
-    /*! \var double m
-     *  \brief particle mass in code unit */
-    float mass;
+    /*! \var int property_index
+     *  \brief index of particle properties */
+    int property_index;
     
-    /*! \var double radius
-     *  \brief particle radius */
-    float radius;
+    /*! \var float density
+     *  \brief local particle density */
+    float density;
     
     /*! \var int id
      *  \brief particle ID in total particle set */
@@ -590,10 +611,10 @@ public:
         particles = new Particle<D>[N];
     }
     
-    /*! \fn void ReadLisFile(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end)
-     *  \brief read particle data from *.lis file
+    /*! \fn void ReadMultipleLisFile(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end)
+     *  \brief read particle data from a series of *.lis file created by each processor
      *  Assume that one cpu core read one snapshot once */
-    void ReadLisFile(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end) {
+    void ReadMultipleLisFile(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end) {
         std::ifstream lis_file;
         long tmp_num_particle;
         
@@ -601,28 +622,33 @@ public:
         lis_file.open(begin->c_str(), std::ios::binary);
         if (lis_file.is_open()) {
             lis_file.read(reinterpret_cast<char*>(coor_lim), 12*sizeof(float));
-            io_ops->log_info << *begin << ", x1l = " << coor_lim[0] << ", x1u = " << coor_lim[1]
+            progIO->log_info << *begin << ", x1l = " << coor_lim[0] << ", x1u = " << coor_lim[1]
             << ", x2l = " << coor_lim[2] << ", x2u = " << coor_lim[3]
             << ", x3l = " << coor_lim[4] << ", x3u = " << coor_lim[5]
             << ", x1dl = " << coor_lim[6] << ", x1du = " << coor_lim[7]
             << ", x2dl = " << coor_lim[8] << ", x2du = " << coor_lim[9]
             << ", x3dl = " << coor_lim[10] << ", x3du = " << coor_lim[11] << "\n";
             lis_file.read(reinterpret_cast<char*>(&num_type), sizeof(int));
-            io_ops->log_info << "num_type = " << num_type;
+            progIO->log_info << "num_type = " << num_type;
             type_info.resize(num_type);
+            
             for (int i = 0; i != num_type; i++) {
                 lis_file.read(reinterpret_cast<char*>(&type_info[i]), sizeof(float));
-                io_ops->log_info << ": type_info[" << i << "] = " << type_info[i];
+                progIO->log_info << ": type_info[" << i << "] = " << type_info[i];
             }
-            io_ops->log_info << "; || ";
+            progIO->log_info << "; || ";
             lis_file.read(reinterpret_cast<char*>(&time), sizeof(float));
             lis_file.read(reinterpret_cast<char*>(&dt), sizeof(float));
-            io_ops->log_info << "time = " << time << ", dt = " << dt;
+            progIO->log_info << "time = " << time << ", dt = " << dt;
             lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
             num_particle = static_cast<__uint32_t>(tmp_num_particle);
             lis_file.close();
+        } else { // if (lis_file.is_open())
+            progIO->error_message << "Error: Failed to open file " << begin->c_str() << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+            exit(3); // cannot open file
         }
-
+        
         for (std::vector<std::string>::iterator it = (begin+1); it != end; it++) {
             lis_file.open(it->c_str(), std::ios::binary);
             if (lis_file.is_open()) {
@@ -630,21 +656,28 @@ public:
                 lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
                 num_particle += static_cast<__uint32_t>(tmp_num_particle);
                 lis_file.close();
+            } else {
+                progIO->error_message << "Error: Failed to open file " << it->c_str() << std::endl;
+                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+                exit(3); // cannot open file
             }
         }
         
-        io_ops->log_info << ", total num_particle = " << num_particle << std::endl;
-        io_ops->Output(std::clog, io_ops->log_info, io_ops->__even_more_output, io_ops->__all_processors);
+        progIO->log_info << ", total num_particle = " << num_particle << std::endl;
+        progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
         
         AllocateSpace(num_particle);
         
         // Second step, extend box limit to include ghost zone
+        
+        
+        // Thrid step, read particle data and duplicate ghost particles
         __uint32_t tmp_id = 0;
         Particle<D> *p;
         size_t triple_float = 3 * sizeof(float);
         size_t one_float = sizeof(float);
         size_t one_fil = sizeof(float) + sizeof(int) + sizeof(long);
-
+        
         for (std::vector<std::string>::iterator it = begin; it != end; it++) {
             lis_file.open(it->c_str(), std::ios::binary);
             if (lis_file.is_open()) {
@@ -657,21 +690,133 @@ public:
                 for (int i = 0; i != tmp_num_particle; i++) {
                     p = &particles[tmp_id];
                     std::memcpy((char*)p->pos.data, tmp_char, triple_float);
-                    tmp_char += triple_float;
+                    std::advance(tmp_char, triple_float);
                     std::memcpy((char*)p->vec.data, tmp_char, triple_float);
-                    tmp_char += triple_float;
-                    std::memcpy((char*)&p->radius, tmp_char, one_float);
-                    tmp_char += one_float;
-                    std::memcpy((char*)&p->mass, tmp_char, one_float);
-                    tmp_char += one_fil;
+                    std::advance(tmp_char, triple_float);
+                    std::memcpy((char*)&p->density, tmp_char, one_float);
+                    std::advance(tmp_char, one_float);
+                    std::memcpy((char*)&p->property_index, tmp_char, one_float);
+                    std::advance(tmp_char, one_fil);
                     p->id = tmp_id++;
                 }
                 lis_file.close();
+            } else { // if (lis_file.is_open())
+                progIO->error_message << "Error: Failed to open file " << it->c_str() << std::endl;
+                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+                exit(3); // cannot open file
             }
         }
         
-        io_ops->log_info << "id = " << particles[567].id << ", mass = " << particles[567].mass << ", rad = " << particles[567].radius << ", pos = " << particles[567].pos << ", v = " << particles[567].vec << std::endl;
-        io_ops->Output(std::clog, io_ops->log_info, io_ops->__even_more_output, io_ops->__all_processors);
+        progIO->log_info << "id = " << particles[567].id << ", property_index = " << particles[567].property_index << ", rad = " << particles[567].density << ", pos = " << particles[567].pos << ", v = " << particles[567].vec << std::endl;
+        progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
+        
+    }
+    
+    /*! \fn void ReadSingleLisFile(std::vector<std::string>::iterator it)
+     *  \brief read particle data from one combined lis file from all processors */
+    void ReadSingleLisFile(std::vector<std::string>::iterator it) {
+        std::ifstream lis_file;
+        long tmp_num_particle;
+        
+        lis_file.open(it->c_str(), std::ios::binary);
+        if (lis_file.is_open()) {
+            lis_file.read(reinterpret_cast<char*>(coor_lim), 12*sizeof(float));
+            progIO->log_info << *it << ", x1l = " << coor_lim[0] << ", x1u = " << coor_lim[1]
+            << ", x2l = " << coor_lim[2] << ", x2u = " << coor_lim[3]
+            << ", x3l = " << coor_lim[4] << ", x3u = " << coor_lim[5]
+            << ", x1dl = " << coor_lim[6] << ", x1du = " << coor_lim[7]
+            << ", x2dl = " << coor_lim[8] << ", x2du = " << coor_lim[9]
+            << ", x3dl = " << coor_lim[10] << ", x3du = " << coor_lim[11] << "\n";
+            lis_file.read(reinterpret_cast<char*>(&num_type), sizeof(int));
+            progIO->log_info << "num_type = " << num_type;
+            type_info.resize(num_type);
+            for (int i = 0; i != num_type; i++) {
+                lis_file.read(reinterpret_cast<char*>(&type_info[i]), sizeof(float));
+                progIO->log_info << ": type_info[" << i << "] = " << type_info[i];
+            }
+            progIO->log_info << "; || ";
+            lis_file.read(reinterpret_cast<char*>(&time), sizeof(float));
+            lis_file.read(reinterpret_cast<char*>(&dt), sizeof(float));
+            progIO->log_info << "time = " << time << ", dt = " << dt;
+            lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
+            num_particle = static_cast<__uint32_t>(tmp_num_particle);
+            progIO->log_info << ", total num_particle = " << num_particle << std::endl;
+            progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
+            
+            AllocateSpace(num_particle);
+            
+            // Thrid step, read particle data and duplicate ghost particles
+            __uint32_t tmp_id = 0;
+            Particle<D> *p;
+            size_t triple_float = 3 * sizeof(float);
+            size_t one_float = sizeof(float);
+            size_t one_int = sizeof(int);
+            size_t one_fil = one_float + one_int + sizeof(long);
+            
+            std::stringstream content;
+            content << lis_file.rdbuf();
+            std::string tmp_str = content.str();
+            const char *tmp_char = tmp_str.data();
+            for (int i = 0; i != tmp_num_particle; i++) {
+                p = &particles[tmp_id];
+                std::memcpy((char*)p->pos.data, tmp_char, triple_float);
+                std::advance(tmp_char, triple_float);
+                std::memcpy((char*)p->vec.data, tmp_char, triple_float);
+                std::advance(tmp_char, triple_float);
+                std::memcpy((char*)&p->density, tmp_char, one_float);
+                std::advance(tmp_char, one_float);
+                std::memcpy((char*)&p->property_index, tmp_char, one_int);
+                std::advance(tmp_char, one_fil);
+                p->id = tmp_id++;
+            }
+            lis_file.close();
+        } else { // if (lis_file.is_open())
+            progIO->error_message << "Error: Failed to open file " << it->c_str() << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+            exit(3); // cannot open file
+        }
+        
+        progIO->log_info << "id = " << particles[567].id << ", property_index = " << particles[567].property_index << ", rad = " << particles[567].density << ", pos = " << particles[567].pos << ", v = " << particles[567].vec << std::endl;
+        progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
+    }
+    
+    
+    /*! \fn void ReadLisFile(int loop_count)
+     *  \brief read particle data from *.lis file */
+    void ReadLisFile(int loop_count) {
+        timer[__tmp_used_timer].StartTimer();
+        if (progIO->flags.combined_flag) {
+            ReadSingleLisFile(progIO->file_name.lis_data_file_name.begin()+loop_count);
+        } else {
+            std::vector<std::string>::iterator file_head = progIO->file_name.lis_data_file_name.begin();
+            ReadMultipleLisFile(file_head + loop_count * progIO->num_cpu,
+                                file_head + loop_count * progIO->num_cpu + progIO->num_cpu);
+        }
+        timer[__tmp_used_timer].StopTimer();
+        progIO->log_info << "Reading loop_count (" << loop_count << ") cost " << timer[__tmp_used_timer].GiveTime() << " seconds\n";
+        progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+        
+        progIO->physical_quantities[loop_count].time = time;
+        progIO->physical_quantities[loop_count].dt = dt;
+        
+        // initialize particle scale heights
+        progIO->physical_quantities[loop_count].particle_scale_height.resize(num_type);
+        for (auto &item : progIO->physical_quantities[loop_count].particle_scale_height) {
+            item = 0;
+        }
+        // calculate particle scale heights and find out maximum particle density
+        for (__uint32_t i = 0; i != num_particle; i++) {
+            progIO->physical_quantities[loop_count].particle_scale_height[particles[i].property_index] += particles[i].pos[2] * particles[i].pos[2];
+            progIO->physical_quantities[loop_count].max_particle_density = std::max(progIO->physical_quantities[loop_count].max_particle_density, particles[i].density);
+        }
+        progIO->log_info << "loop_count = " << loop_count << ", max(rho_p) = " << progIO->physical_quantities[loop_count].max_particle_density;
+        int tmp_index = 0;
+        for (auto &item : progIO->physical_quantities[loop_count].particle_scale_height) {
+            item = std::sqrt(item/num_particle);
+            progIO->log_info << ", H_p[" << tmp_index++ << "] = " << item;
+        }
+        progIO->log_info << std::endl;
+        progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
         
     }
     
@@ -788,7 +933,10 @@ public:
     
     /*! \fn inline int Key8Level(morton_key &m_key, int &level)
      *  \brief extract info (three digits) of specific level from the 96-bit key */
-    inline int Key8Level(morton_key m_key, int level);
+    inline int Key8Level(morton_key m_key, int level) {
+        int shr = 93 - 3 * (level - 1);
+        return (m_key>>shr) & 7UL; // 7UL = {0...60...0}{0111}
+    }
     
     /*! \fn void OutKey(std::ostream &stream, morton_key m_key)
      *  \brief output the particle index and its key */
@@ -796,7 +944,9 @@ public:
     
     /*! \fn inline int ParticleIndex(morton_key m_key)
      *  \brief return the particle index from the Morton Key */
-    inline int ParticleIndex(morton_key m_key);
+    inline int ParticleIndex(morton_key m_key) {
+        return (m_key>>96);
+    }
     
     /*! \fn morton_key Dilate3_Int32(int pos)
      *  \brief spread the bits of pos 3 apart: i.e., {1011} becomes {001 000 001 001} */
@@ -875,6 +1025,7 @@ public:
         for (int d = 0; d != D; d++) {
             result |= (Dilate3_Int32(pos[d])<<d);
         }
+        return result;
     }
     
 };
@@ -1077,7 +1228,7 @@ public:
     void SortPoints() {
         InternalParticle *tmp = new InternalParticle[num_particle];
         for (int i = 0; i != num_particle; i++) {
-            tmp[i] = particle_list[ParticleIndex(morton[i])];
+            tmp[i] = particle_list[this->ParticleIndex(morton[i])];
         }
         std::memcpy(particle_list, tmp, sizeof(InternalParticle)*num_particle);
         delete [] tmp;
@@ -1086,11 +1237,11 @@ public:
     /*! \fn void CountNodesLeaves(const int level, int __begin, const int __end)
      *  \brief traverse the tree and count nodes and leaves */
     void CountNodesLeaves(const int __level, int __begin, const int __end) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
-        int orthant = Key8Level(morton[__begin], __level);
+        int orthant = this->Key8Level(morton[__begin], __level);
         while ( (orthant < max_daughters) && (__begin < __end)) {
             int count = 0;
             while (__begin < __end) {
-                if (Key8Level(morton[__begin], __level) == orthant ) {
+                if (this->Key8Level(morton[__begin], __level) == orthant ) {
                     __begin++;
                     count++;
                 } else {
@@ -1110,7 +1261,7 @@ public:
             }
             
             if (__begin < __end) {
-                orthant = Key8Level(morton[__begin], __level); // search next data
+                orthant = this->Key8Level(morton[__begin], __level); // search next data
             }
         }
     }
@@ -1123,14 +1274,14 @@ public:
         assert(tree[__parent].first_daughter == 0);
         assert(tree[__parent].num_daughter == 0); // parent shouldn't have any daughters
         
-        int orthant = Key8Level(morton[__begin], __level);
+        int orthant = this->Key8Level(morton[__begin], __level);
         while (__begin < __end) {
             assert( orthant < max_daughters);
             
             // count number of particles in this orthant
             int count = 0;
             while (__begin < __end) {
-                if (Key8Level(morton[__begin], __level) == orthant) {
+                if (this->Key8Level(morton[__begin], __level) == orthant) {
                     __begin++;
                     count++;
                 } else {
@@ -1145,7 +1296,7 @@ public:
             
             if (tree[__parent].first_daughter == 0) {
                 // first daughter
-                assert( tree[__parent].num_daughter = 0);
+                assert(tree[__parent].num_daughter = 0);
                 tree[__parent].first_daughter = daughter;
                 tree[__parent].num_daughter = 1;
             } else {
@@ -1161,7 +1312,7 @@ public:
             p->end = __begin;
             p->half_width = __half_width;
             for (int d = 0; d != D; d++) {
-                p->center[d] = __center[d] + __half_width * Orthant<D>::orthant[orthant][d];
+                p->center[d] = __center[d] + __half_width * Orthant<D>::orthants[orthant][d];
             }
             p->orthant = orthant;
             p->first_daughter = 0;
@@ -1181,7 +1332,7 @@ public:
             
             // now next daughter of this node
             if (__begin < __end) {
-                orthant = Key8Level(morton[__begin], __level);
+                orthant = this->Key8Level(morton[__begin], __level);
             }
         }
     }
@@ -1200,7 +1351,7 @@ public:
         
         for (int i = 0; i != num_particle; i++) {
             particle_list[i].pos = particle_set[i].pos;
-            particle_list[i].mass = particle_set[i].mass;
+            particle_list[i].mass = particle_set[i].property_index;
             particle_list[i].id = i; // original index of particles
         }
         
@@ -1209,7 +1360,7 @@ public:
         morton = new typename MortonKey<D>::morton_key[num_particle];
         
         for (int i = 0; i != num_particle; i++) {
-            morton[i] = Morton(particle_list[i].pos, i);
+            morton[i] = this->Morton(particle_list[i].pos, i);
         }
         std::sort(&(morton[0]), &(morton[num_particle]), AscendingMorton());
         for (int i = 0; i != num_particle-1; i++) {
@@ -1280,7 +1431,7 @@ public:
         
         for (int p = tree[node].begin; p != tree[node].end; p++) {
             if (!Within(particle_list[p].pos, node_center, __half_width)) {
-                io_ops->error_message << "Particle " << particle_list[p].pos << " outside node " << node_center << " with width " << 2*tree[node].half_width;
+                progIO->error_message << "Particle " << particle_list[p].pos << " outside node " << node_center << " with width " << 2*tree[node].half_width;
             }
         }
         
@@ -1333,7 +1484,7 @@ public:
             }
         }
         if (daughter == -1) {
-            io_ops->error_message << "Key2Leaf: leaf cell doesn't exist in tree." << std::endl;
+            progIO->error_message << "Key2Leaf: leaf cell doesn't exist in tree." << std::endl;
             assert(daughter >= 0);
         }
         return daughter;

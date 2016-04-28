@@ -133,13 +133,6 @@ void BaseMortonKey::InitializeMortonConstants() {
     
 }
 
-/*! \fn inline int Key8Level(morton_key m_key, int level)
- *  \brief extract info (three digits) of specific level from the 96-bit key */
-inline int BaseMortonKey::Key8Level(morton_key m_key, int level) {
-    int shr = 93 - 3 * (level - 1);
-    return (m_key>>shr) & 7UL; // 7UL = {0...60...0}{0111}
-}
-
 /*! \fn void OutKey(std::ostream stream, morton_key m_key)
  *  \brief output the particle index and its key as octal digits */
 void BaseMortonKey::OutKey(std::ostream &stream, morton_key m_key)
@@ -152,13 +145,6 @@ void BaseMortonKey::OutKey(std::ostream &stream, morton_key m_key)
         stream << Key8Level(m_key, i);
     }
 }
-
-/*! \fn inline int ParticleIndex(morton_key m_key)
- *  \brief return the particle index from the Morton Key */
-inline int BaseMortonKey::ParticleIndex(morton_key m_key) {
-    return (m_key>>96);
-}
-
 
 /*! \fn morton_key Dilate3_Int32(int pos)
  *  \brief spread the bits of pos 3 apart: i.e., {1011} becomes {001 000 001 001} */
