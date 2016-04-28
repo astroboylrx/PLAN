@@ -534,6 +534,34 @@ public:
     int id;
 };
 
+/*! \class template <int D> Plantesimal
+ *  \brief data for one plantesimal structure */
+template <int D>
+class Plantesimal {
+private:
+    
+public:
+    /*! \var std::vector<__uint32_t> indices
+     *  \brief indices of particles that belongs to this plantesimals */
+    std::vector<__uint32_t> indices;
+    
+    /*! \var SmallVec<double, D> center
+     *  \brief geometric center */
+    SmallVec<double, D> center;
+    
+    /*! \var double R_Hill
+     *  \brief Hill Radius */
+    double R_Hill;
+    
+    /*! \var double mass
+     *  \brief Hill Radius */
+    double mass;
+    
+    /*! \var double Jz
+     *  \brief angular momentum in z-direction */
+    double Jz;
+};
+
 /*! \class template <int D> ParticleSet
  *  \brief data for the entire particle set
  *  \tparam D dimension of data */
@@ -817,6 +845,12 @@ public:
         }
         progIO->log_info << std::endl;
         progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+        
+    }
+    
+    /*! \fn void MakeGhostParticles(const double ghost_zone_ratio)
+     *  \brief make ghost particles for ghost zone */
+    void MakeGhostParticles(const double ghost_zone_ratio) {
         
     }
     
@@ -1657,6 +1691,16 @@ public:
         }
     }
     
+    /*! \fn void FindPlanetesimals()
+     *  \brief find plantesimals inside data */
+    void FindPlanetesimals() {
+        // Get high density regions by sorting dpar
+        
+        
+        // Find neighbors + removing from list
+        
+        
+    }
     
     
     
