@@ -76,19 +76,8 @@ public:
     SmallVec() : data{0} {}
     
     
-    
-#ifdef OLDCPP
-    /*! \fn template <class U>
-     *  \brief overloading constructor to broadcast a scalar, e.g., unit_vec = SmallVec<double, 3>(1.0). For keyword "explicit", read explanations below */
-    template <class U>
-    explicit SmallVec(const U& scalar) {
-        for (int i = 0; i != D; i++) {
-            data[i] = static_cast<T>(scalar);
-        }
-    }
-#else // OLDCPP
     /*
-     * Warning: I haven't fully understand the usage of enable_if
+     * Warning: Keep extra mind and cautions here. I haven't fully understand the usage of enable_if.
      */
     
     /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const U& scalar)
@@ -157,8 +146,6 @@ public:
      * C++ has a special parameter type, ellipsis, that can be used to pass a varying number of arguments. It is called the ellipsis operator. Try to undersatnd it by recalling the usage of printf() in C where you can input any amount of arguments. Also, sizeof...() is used to count the number of arguments, which is different with sizeof()(reference: http://www.cplusplus.com/articles/EhvU7k9E/ )
      * Then "data{ head, T(tail)... }" is called an initialization list. Usually it is for passing arguments to the constructor of a parent class.
      */
-    
-#endif // OLDCPP
     
     /*! \fn T operator[] ( const size_t i ) const
      *  \brief allow access with usual vector notation */
@@ -943,11 +930,9 @@ private:
     
 public:
     // define name alias for intuitive definition
-#ifdef OLDCPP
-    typedef __uint128_t morton_key;
-#else // OLDCPP
+    /*! \var using morton_key = __uint128_t
+     *  \brief define a type equivalent to __uint128_t for morton key */
     using morton_key = __uint128_t;
-#endif // OLDCPP
     
     /*! \fn BaseMortonKey()
      *  \brief constructor */
@@ -1007,16 +992,17 @@ class MortonKey : public BaseMortonKey {
 private:
     
 public:
-    
-#ifdef OLDCPP
-    typedef SmallVec<int, D> ivec;
-    typedef SmallVec<float, D> fvec;
-    typedef SmallVec<double, D> dvec;
-#else // OLDCPP
+    /*! \var using ivec = SmallVec<int, D>
+     *  \brief define a vector of int type */
     using ivec = SmallVec<int, D>;
+    
+    /*! \var using fvec = SmallVec<float, D>
+     *  \brief define a vector of float type */
     using fvec = SmallVec<float, D>;
+    
+    /*! \var using dvec = SmallVec<double, D>
+     *  \brief define a vector of double type */
     using dvec = SmallVec<double, D>;
-#endif // OLDCPP
     
     /*! \var dvec scale
      *  \brief scale the box length to 1 */
@@ -1076,16 +1062,17 @@ class BHtree : public MortonKey<D> {
 private:
     
 public:
-    
-#ifdef OLDCPP
-    typedef SmallVec<int, D> ivec;
-    typedef SmallVec<float, D> fvec;
-    typedef SmallVec<double, D> dvec;
-#else // OLDCPP
+    /*! \var using ivec = SmallVec<int, D>
+     *  \brief define a vector of int type */
     using ivec = SmallVec<int, D>;
+    
+    /*! \var using fvec = SmallVec<float, D>
+     *  \brief define a vector of float type */
     using fvec = SmallVec<float, D>;
+    
+    /*! \var using dvec = SmallVec<double, D>
+     *  \brief define a vector of double type */
     using dvec = SmallVec<double, D>;
-#endif // OLDCPP
     
     /*! \struct InternalParticle
      *  \brief necessary particle data for tree */

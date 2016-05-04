@@ -1,6 +1,6 @@
 //
 //  global.hpp
-//  PLAN: PLantesimal ANalyzer (a better version of project PLATO)
+//  PLATO: PLAneTesimal locatOr
 //
 //  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
@@ -26,33 +26,25 @@
 #include <bitset>
 #include <iomanip>
 #include <numeric>
-#ifndef OLDCPP
 #include <array>
 #include <type_traits>
-#endif
 // Include other libraries
 #include <unistd.h>
 #include <getopt.h>
 
-#define MPI_ON // Comment out this line before committing!!
-#ifdef MPI_ON // Only enable these options during compilation
+//#define MPI_ON // Comment out this line before committing!!
+#ifdef MPI_ON // "ifdef" options are defined during compilation
 #include "mpi.h"
 #endif // MPI_ON
 
-#ifndef OLDCPP
 // Check c++11 support
 #if __cplusplus <= 199711L
-#error This program needs at least a C++11 compliant compiler (or define OLDCPP as an expedient, which is not guaranteed to work so far).
+#error This program wants a C++11 compliant compiler (option -DOLDCPP which supports old compilers has been abandoned).
 #endif // __cplusplus
-#else // OLDCPP
-// In C++, use const instead of defining macros as constants
-const void *nullptr = NULL;
-#endif // OLDCPP
 
-
-/*********************************************/
-/**********Basic_IO_Operations Part **********/
-/*********************************************/
+/**********************************************/
+/********** Basic_IO_Operations Part **********/
+/**********************************************/
 
 /*! \class IO_FileName
  *  \brief contains all I/O-related file path & names
@@ -232,7 +224,8 @@ public:
     inline void Reset(std::ostringstream &content) {
         content.str(std::string());
         content.clear();
-        //std::ostringstream().swap(content); // sometimes need c++14
+        // The most elegant way to clear state and empty content is below, but it sometimes needs c++14 since different compilers have different implementations
+        //std::ostringstream().swap(content);
     }
     
     /*! \fn ~Basic_IO_Operations()
@@ -284,19 +277,14 @@ public:
      *  \brief stream offset used during parallel file I/O */
     MPI_Offset header_offset {0};
     
-#ifdef OLDCPP
-    typedef MPI_File file_obj;
-#else // OLDCPP
+    /*! \var using file_obj = MPI_File
+     *  \brief define a type for opening files */
     using file_obj = MPI_File;
-#endif // OLDCPP
     
 #else // MPI_ON
-    
-#ifdef OLDCPP
-    typedef std::ofstream file_obj
-#else // OLDCPP
+    /*! \var using file_obj = std::ofstream
+     *  \brief define a type for opening files */
     using file_obj = std::ofstream;
-#endif // OLDCPP
     
 #endif // MPI_ON
     

@@ -1,6 +1,6 @@
 //
 //  global.cpp
-//  PLAN: PLantesimal ANalyzer (a better version of project PLATO)
+//  PLATO: PLAneTesimal locatOr
 //
 //  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
@@ -238,14 +238,7 @@ void Basic_IO_Operations::Output(std::ostream &stream, std::ostringstream &conte
         stream << content.str() << std::flush;
 #endif // MPI_ON
     }
-    
-    // The most elegant way to clear state and empty content
-    // However, this requires those compilers that support c++11
-    //std::ostringstream().swap(content);
-    
-    // alternatively, use
-    content.str(std::string()); // empty the content
-    content.clear(); // clear error state if any
+    Reset(content);
 }
 
 /*! \fn void PrintStars(std::ostream &stream, const OutputLevel &output_level)
