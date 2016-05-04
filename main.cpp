@@ -69,7 +69,7 @@ int main(int argc, const char * argv[])
         BasicAnalyses(particle_set, loop_count);
         
         particle_set.MakeGhostParticles(0.2);
-        //tree.BuildTree(__center, 0.1, particle_set, 8);
+        tree.BuildTree(__center, 0.1, particle_set, 8);
         
         /***** Step III-B, identity high density region and find planetesimals *****/
         tree.FindPlanetesimals();
