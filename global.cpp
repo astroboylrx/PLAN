@@ -1,13 +1,15 @@
 //
 //  global.cpp
-//  PLATO: PLAneTesimal locatOr
+//  PLAN: PLantesimal ANalyzer
 //
 //  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
 //
 
-#include "global.hpp"
+/*! \file global.cpp
+ *  \brief contains function definitions for I/O-related class and utilities */
 
+#include "global.hpp"
 
 /*****************************************/
 /********** Basic_IO_Operations **********/
@@ -33,6 +35,8 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"Debug", no_argument, &flags.debug_flag, 1},
         {"Verbose", no_argument, &flags.verbose_flag, 1},
         {"Combined", no_argument, &flags.combined_flag, 1},
+        {"Find_Clumps", no_argument, &flags.find_clumps_flag, 1},
+        {"Basic_Analyses", no_argument, &flags.basic_analyses_flag, 1},
         // These options don't set a flag
         {"num_cpu", required_argument, 0, 'c'},
         {"data_dir", required_argument, 0, 'i'},
@@ -188,6 +192,11 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
             ostream_level = __even_more_output;
         }
         
+        // if no serious flags, set find_clumps_flag to 1
+        if (!flags.find_clumps_flag && !flags.basic_analyses_flag) {
+            flags.find_clumps_flag = 1;
+        }
+        
         Output(std::clog, log_info, __more_output, __master_only);
         PrintStars(std::clog, __more_output);
         if (optind < argc) {
@@ -212,10 +221,12 @@ void Basic_IO_Operations::PrintUsage(const char *program_name)
 {
     out_content << "USAGE: " << program_name
     << " -c <num_cpu> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [flags]\n"
-    << "Example: ./plato -c 64 -i ./ -b Par_Strat3d -p ds -f 170:227 -o result.txt\n"
+    << "Example: ./plan -c 64 -i ./ -b Par_Strat3d -p ds -f 170:227 -o result.txt\n"
     << "Use --Verbose to obtain more output during executation"
     << "Use --Debug to obtain all possbile output during executation"
-    << "Use --Combined to deal with combined lis files (from all processors";
+    << "Use --Combined to deal with combined lis files (from all processors"
+    << "Use --Find_Clumps to run clump finding functions"
+    << "Use --Basic_Analyses to perform basic analyses, which will output max($\rho_p$) and $H_p$";
     out_content << std::endl;
     Output(std::cout, out_content, __normal_output, __master_only);
     exit(2); // cannot execute
@@ -405,7 +416,7 @@ void MPI_Wrapper::WriteSingleFile(file_obj &__file, std::ostringstream &content,
 #ifdef MPI_ON
     std::string tmp_str = content.str();
     if (mpi_level == __master_only) {
-        header_offset = tmp_str.size();
+        header_offset += tmp_str.size();
         MPI_Bcast(&header_offset, 1, MPI_OFFSET, master, world);
         if (myrank == master) {
             const char *tmp_char = tmp_str.data();

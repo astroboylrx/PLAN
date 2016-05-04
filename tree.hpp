@@ -1,12 +1,15 @@
 //
 //  tree.hpp
-//  PLATO: PLAneTesimal locatOr
+//  PLAN: PLantesimal ANalyzer
 //
 //  Created by Rixin Li on 3/11/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
 //
 //  Some of the following code are based on programs written by Dr. Philip Pinto during his course (ASTR596) in fall 2015.
 //  Descriptions and comments are written by Rixin Li.
+
+/*! \file tree.hpp
+ *  \brief provide objects related to SmallVec, particle, tree and planetesimal */
 
 #ifndef tree_hpp
 #define tree_hpp
@@ -104,7 +107,7 @@ public:
     explicit SmallVec(const U (&vec)[E]) { // remember how to reference an array
         progIO->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
         progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
-        exit(2);
+        exit(4); // wrong function argument
     }
     
     /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const std::array<U, D> &vec)
@@ -122,14 +125,14 @@ public:
     explicit SmallVec(std::array<U, E> const &vec) {
         progIO->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
         progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
-        exit(2);
+        exit(4); // wrong function argument
     }
     
     template <class U, typename std::enable_if<std::is_pointer<U>::value, int>::type = 0>
     SmallVec(U arg) {
         progIO->error_message << "Error: Please don't provide a pointer to construct class SmallVec. Whether it is a pointer to scalar or a pointer to array remains unknown. " << std::endl;
         progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
-        exit(2);
+        exit(4); // wrong function argument
     }
     
     /*
@@ -622,7 +625,6 @@ public:
      *  \brief allcoate space for particles */
     void AllocateSpace(int N) {
         Reset();
-        num_particle = N;
         particles = new Particle<D>[N];
     }
     
@@ -760,7 +762,7 @@ public:
             
             AllocateSpace(num_particle);
             
-            // Thrid step, read particle data and duplicate ghost particles
+            // Thrid step, read particle data
             __uint32_t tmp_id = 0;
             Particle<D> *p;
             size_t triple_float = 3 * sizeof(float);
@@ -813,26 +815,6 @@ public:
         
         progIO->physical_quantities[loop_count].time = time;
         progIO->physical_quantities[loop_count].dt = dt;
-        
-        // initialize particle scale heights
-        progIO->physical_quantities[loop_count].particle_scale_height.resize(num_type);
-        for (auto &item : progIO->physical_quantities[loop_count].particle_scale_height) {
-            item = 0;
-        }
-        // calculate particle scale heights and find out maximum particle density
-        for (__uint32_t i = 0; i != num_particle; i++) {
-            progIO->physical_quantities[loop_count].particle_scale_height[particles[i].property_index] += particles[i].pos[2] * particles[i].pos[2];
-            progIO->physical_quantities[loop_count].max_particle_density = std::max(progIO->physical_quantities[loop_count].max_particle_density, particles[i].density);
-        }
-        progIO->log_info << "loop_count = " << loop_count << ", max(rho_p) = " << progIO->physical_quantities[loop_count].max_particle_density;
-        int tmp_index = 0;
-        for (auto &item : progIO->physical_quantities[loop_count].particle_scale_height) {
-            item = std::sqrt(item/num_particle);
-            progIO->log_info << ", H_p[" << tmp_index++ << "] = " << item;
-        }
-        progIO->log_info << std::endl;
-        progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
-        
     }
     
     /*! \fn void MakeGhostParticles(const double ghost_zone_ratio)

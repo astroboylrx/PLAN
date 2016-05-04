@@ -1,10 +1,13 @@
 //
 //  tree.cpp
-//  PLATO: PLAneTesimal locatOr
+//  PLAN: PLantesimal ANalyzer
 //
 //  Created by Rixin Li on 3/11/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
 //
+
+/*! \file tree.cpp
+ *  \brief contains function definitions for tree-related class */
 
 #include "tree.hpp"
 

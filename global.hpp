@@ -1,10 +1,13 @@
 //
 //  global.hpp
-//  PLATO: PLAneTesimal locatOr
+//  PLAN: PLantesimal ANalyzer
 //
 //  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
 //
+
+/*! \file global.hpp
+ *  \brief provide library headers, I/O-related class and utilities */
 
 #ifndef global_hpp
 #define global_hpp
@@ -32,7 +35,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-//#define MPI_ON // Comment out this line before committing!!
+#define MPI_ON // Comment out this line before committing!!
 #ifdef MPI_ON // "ifdef" options are defined during compilation
 #include "mpi.h"
 #endif // MPI_ON
@@ -66,7 +69,7 @@ public:
     std::string data_file_postname;
     
     /*! \var std::string output_file_path
-     *  \brief path for ostream output */
+     *  \brief output file for basic_analyses result */
     std::string output_file_path;
     
     /*! \var std::vector<std::string> lis_data_file_name
@@ -94,7 +97,7 @@ public:
     float time;
     
     /*! \var float dt;
-     *  \brief simulation time */
+     *  \brief simulation time step */
     float dt;
     
     /*! \var std::vector<double> particle_scale_height;
@@ -139,6 +142,13 @@ public:
      *  \brief set this flag to read combined data */
     int combined_flag {0};
     
+    /*! \var int find_clumps_flag
+     *  \brief set this flag to find clumps & planetesimals */
+    int find_clumps_flag {0};
+    
+    /*! \var int basic_analyses_flag
+     *  \brief set this flag to perform basic data analysis */
+    int basic_analyses_flag {0};
 };
 
 /*! \class Basic_IO_Operations
@@ -188,11 +198,11 @@ public:
     int num_cpu;
     
     /*! \var int width {15}
-     *  \brief set default width of one data unit */
+     *  \brief set default width of one data unit during output */
     int width {15};
     
     /*! \var int column {4}
-     *  \brief data column in result file */
+     *  \brief data column in basic_analyses result file */
     int column {2};
     
     /*! \fn Basic_IO_Operations()
