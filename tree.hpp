@@ -17,485 +17,6 @@
 #include "global.hpp"
 
 /***********************************/
-/********** SmallVec Part **********/
-/***********************************/
-
-/*
- * N.B.: template classes need to have the method definitions inside the header file, in order to let the linker work. Alternatively, you can put definitions in other file and include after declaration in the header file.
- */
-
-/*! \struct template <bool, class T, class U> __SelectIf_base
- *  \brief a template for struct __SelectIF to accept a bool as condition */
-template <bool, class T, class U>
-struct __SelectIf {};
-
-/*! \struct template <class T, class U> __SelectIf_true
- *  \brief a template for struct __SelectIF to select T type if bool is true */
-template <class T, class U>
-struct __SelectIf<true, T, U> { typedef T type; };
-
-/*! \struct template <class T, class U> __SelectIf_false
- *  \brief a template for struct __SelectIF to select U type if bool is false */
-template <class T, class U>
-struct __SelectIf<false, T, U> { typedef U type; };
-
-/*! \struct template <class T, class U> PromoteNumeric
- * this struct controls the type promotion, this struct nests many levels of selections. Read comments/explanations from inside and notice that comments start with new lines are different with comments after statements */
-template <class T, class U>
-struct PromoteNumeric {
-    typedef typename __SelectIf<
-    //if T and U are both integers or both non-integers
-    std::numeric_limits<T>::is_integer == std::numeric_limits<U>::is_integer, // middle, served as bool for outermost
-    //then pick the larger type
-    typename __SelectIf<(sizeof(T) > sizeof(U)), T,
-    //else if they are equal
-    typename __SelectIf<(sizeof(T) == sizeof(U)),
-    //pick the one which is unsigned
-    typename __SelectIf<std::numeric_limits<T>::is_signed, U, T>::type, // this is the innermost layer
-    //else select U as bigger
-    U
-    >::type // this is the second innermost layer
-    >::type, // middle, served as T for outermost, nests other layers
-    //else pick the one which is not integer
-    typename __SelectIf<std::numeric_limits<T>::is_integer, U, T>::type // middle, served as U for outermost
-    >::type type; // outermost layer
-};
-
-/*! \class template <class T, int D> SmallVec
- *  \brief define a vector class and all related arithmetic computations
- *  \tparam T data type of elements of this vector
- *  \tparam D dimension of this vector */
-template <class T, int D>
-class SmallVec {
-private:
-    
-public:
-    /*! \var T data[D]
-     *  \brief data of elements of this vector */
-    T data[D];
-    
-    /*! \fn SmallVec() : data{0} {}
-     *  \brief the most basic constructor, list initialization with {0} */
-    SmallVec() : data{0} {}
-    
-    
-    /*
-     * Warning: Keep extra mind and cautions here. I haven't fully understand the usage of enable_if.
-     */
-    
-    /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const U& scalar)
-     *  \brief overloading constructor to broadcast a scalar, e.g., unit_vec = SmallVec<double, 3>(1.0). For keyword "explicit", read explanations below */
-    template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0>
-    explicit SmallVec(const U& scalar) {
-        for (int i = 0; i != D; i++) {
-            data[i] = static_cast<T>(scalar);
-        }
-    }
-    
-    /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const U (&vec)[D])
-     *  \brief overloading constructor to copy an old-fashion array */
-    template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0>
-    explicit SmallVec(const U (&vec)[D]) { // remember how to reference an array
-        for (int i = 0; i != D; i++) {
-            data[i] = static_cast<T>(vec[i]);
-        }
-    }
-  
-    /*! \fn template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0> explicit SmallVec(const U (&vec)[E])
-     *  \brief overloading constructor to notify user a wrong old-fashion array is input */
-    template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0>
-    explicit SmallVec(const U (&vec)[E]) { // remember how to reference an array
-        progIO->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
-        progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
-        exit(4); // wrong function argument
-    }
-    
-    /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const std::array<U, D> &vec)
-     *  \brief overloading constructor to copy an STL array */
-    template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0>
-    explicit SmallVec(const std::array<U, D> &vec) {
-        for (int i = 0; i != D; i++) {
-            data[i] = static_cast<T>(vec[i]);
-        }
-    }
-    
-    /*! \fn template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0> explicit SmallVec(const std::array<U, E> &vec)
-     *  \brief overloading constructor to notify user a wrong STL array is input */
-    template <class U, size_t E, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0, typename std::enable_if<E != D, int>::type = 0>
-    explicit SmallVec(std::array<U, E> const &vec) {
-        progIO->error_message << "Error: Use an array with wrong size to construct class SmallVec." << std::endl;
-        progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
-        exit(4); // wrong function argument
-    }
-    
-    template <class U, typename std::enable_if<std::is_pointer<U>::value, int>::type = 0>
-    SmallVec(U arg) {
-        progIO->error_message << "Error: Please don't provide a pointer to construct class SmallVec. Whether it is a pointer to scalar or a pointer to array remains unknown. " << std::endl;
-        progIO->Output(std::cerr, progIO->error_message, __even_more_output, __all_processors);
-        exit(4); // wrong function argument
-    }
-    
-    /*
-     * Why do we use the keyword "explicit"? (reference: http://www.geeksforgeeks.org/g-fact-93/ )
-     * In C++, if a class has a constructor which can be called with a single argument, then this constructor becomes conversion constructor because such a constructor allows conversion of the single argument to the class being constructed.
-     * We can avoid such implicit conversions as these may lead to unexpected results. We can make the constructor explicit with the help of explicit keyword.
-     */
-    
-    /*! \fn template <typename... Tail> SmallVec(typename std::enable_if<sizeof...(Tail)+1==D, T>::type head, Tail... tail) : data{ head, T(tail)... }
-     *  \brief overloading constructor for initialization in the form of e.g., SmallVec<double, 3>(3, 4.5, 5) */
-    template <typename... Tail>
-    SmallVec(typename std::enable_if<sizeof...(Tail)+1==D, T>::type head, Tail... tail) : data{head, T(tail)...} {}
-    /*
-     * C++ has a special parameter type, ellipsis, that can be used to pass a varying number of arguments. It is called the ellipsis operator. Try to undersatnd it by recalling the usage of printf() in C where you can input any amount of arguments. Also, sizeof...() is used to count the number of arguments, which is different with sizeof()(reference: http://www.cplusplus.com/articles/EhvU7k9E/ )
-     * Then "data{ head, T(tail)... }" is called an initialization list. Usually it is for passing arguments to the constructor of a parent class.
-     */
-    
-    /*! \fn T operator[] ( const size_t i ) const
-     *  \brief allow access with usual vector notation */
-    T operator[] (const size_t i) const {
-        assert(i < D);
-        return *(data+i);
-    }
-    /*
-     * Here "const" after a function declaration means that the function is not allowed to change any class members (except ones that are marked "mutable").
-     */
-    
-    /*! \fn T& operator [] ( const size_t i )
-     *  \brief allow access with usual vector notation */
-    T& operator [] (const size_t i) {
-        assert(i < D);
-        return *(data+i);
-    }
-    
-    /*! \fn const SmallVec& operator +()
-     *  \brief unary operations (sign): make +SmallVec return itself */
-    const SmallVec& operator +() {
-        return *this;
-    }
-    
-    /*! \fn SmallVec operator -()
-     *  \brief unary operations (sign): make -SmallVec return -1*data */
-    SmallVec operator -() {
-        SmallVec<T, D> result;
-        for (int i = 0; i != D; i++) {
-            result[i] = -data[i];
-        }
-        return result;
-    }
-    
-    template <class U>
-    SmallVec<T, D>& operator = (const SmallVec<U, D>& rhs) {
-        for (int i = 0; i != D; i++) {
-            data[i] = rhs.data[i];
-        }
-        return *this;
-    }
-    
-    /*! \fn template <class U> SmallVec<T, D>& operator += (const SmallVec<U, D>& rhs)
-     *  \brief compound assignment operator += */
-    template <class U>
-    SmallVec<T, D>& operator += (const SmallVec<U, D>& rhs) {
-        for (int i = 0; i != D; i++) {
-            data[i] += rhs.data[i];
-        }
-        return *this;
-    }
-    
-    /*! \fn template <class U> SmallVec<T, D>& operator -= (const SmallVec<U, D>& rhs)
-     *  \brief compound assignment operator -= */
-    template <class U>
-    SmallVec<T, D>& operator -= (const SmallVec<U, D>& rhs) {
-        for (int i = 0; i != D; i++) {
-            data[i] -= rhs.data[i];
-        }
-        return *this;
-    }
-    
-    /*! \fn template <class U> SmallVec<T, D>& operator *= (const U rhs)
-     *  \brief compound assignment operator *= */
-    template <class U>
-    SmallVec<T, D>& operator *= (const U rhs) {
-        for (int i = 0; i != D; i++) {
-            data[i] *= rhs;
-        }
-        return *this;
-    }
-    
-    /*! \fn template <class U> SmallVec<T, D>& operator /= (const U rhs)
-     *  \brief compound assignment operator /= */
-    template <class U>
-    SmallVec<T, D>& operator /= (const U rhs) {
-        for (int i = 0; i != D; i++) {
-            data[i] /= rhs;
-        }
-        return *this;
-    }
-    
-    /*! \fn typename PromoteNumeric<T, double>::type Norm() const
-     *  \brief calculate the norm of this vector, |x|, for at least double precision */
-    typename PromoteNumeric<T, double>::type Norm() const {
-        typename PromoteNumeric<T, double>::type sum = 0;
-        for (int i = 0; i != D; i++) {
-            sum += data[i] * data[i];
-        }
-        return sqrt(sum);
-    }
-    
-    /*! \fn typename PromoteNumeric<T, double>::type Norm2() const
-     *  \brief calculate the norm^2 of this vector, |x|^2, for at least double precision */
-    typename PromoteNumeric<T, double>::type Norm2() const {
-        typename PromoteNumeric<T, double>::type sum = 0;
-        for (int i = 0; i != D; i++) {
-            sum += data[i] * data[i];
-        }
-        return sum;
-    }
-    
-    /*! \fn T MaxElement() const
-     *  \brief return the maximum element of this vector */
-    inline T MaxElement() const {
-        return *std::max_element(data, data+D);
-    }
-    
-    /*! \fn T MinElement() const
-     *  \brief return the minimum element of this vector */
-    inline T MinElement() const {
-        return *std::min_element(data, data+D);
-    }
-    
-    /*! \fn template<class U> typename PromoteNumeric<T, U>::type Dot(const SmallVec<U, D>& rhs) const
-     *  \brief calculate the dot product with another vector rhs (with the same dimension) */
-    template<class U>
-    typename PromoteNumeric<T, U>::type Dot(const SmallVec<U, D>& rhs) const {
-        typename PromoteNumeric<T, U>::type tmp = data[0] * rhs[0];
-        for (int i = 1; i < D; i++) {
-            tmp += data[i] * rhs[i];
-        }
-        return tmp;
-    }
-    
-    /*! \fn template <class U> inline SmallVec<typename PromoteNumeric<T, U>::type, 3> Cross(const SmallVec<U, 3>& rhs) const
-     *  \brief calculate cross product of this_vector x rhs in 3-dimension-space */
-    template <class U>
-    inline SmallVec<typename PromoteNumeric<T, U>::type, 3> Cross(const SmallVec<U, 3>& rhs) const {
-        SmallVec<typename PromoteNumeric<T, U>::type, 3> tmp;
-        tmp[0] = data[1] * rhs[2] - data[2] * rhs[1];
-        tmp[1] = data[2] * rhs[0] - data[0] * rhs[2];
-        tmp[2] = data[0] * rhs[1] - data[1] * rhs[0];
-        return tmp;
-    }
-    
-    /*! \fn template <class U, class V> bool AbsClose(const SmallVec<U, D>& rhs, const V epsilon) const
-     *  \brief determine if the absolute difference between this_vector and rhs is less than epsilon in each element */
-    template <class U, class V>
-    bool AbsClose(const SmallVec<U, D>& rhs, const V epsilon) const {
-        SmallVec<typename PromoteNumeric<T, U>::type, D> diff;
-        diff = *this - rhs;
-        bool val = true;
-        for (int i = 0; i != D; i++) {
-            val = val && fabs(diff[i] < epsilon);
-        }
-        return val;
-    }
-    
-    /*! \fn template <class U, class V> int relclose(const SmallVec<U, D>& rhs, const V epsilon) const
-     *  \brief determinte (the relative difference between this_vector and rhs) divided by (the average length of them) is less than epsilon in each element */
-    template <class U, class V>
-    int RelClose(const SmallVec<U, D>& rhs, const V epsilon) const {
-        SmallVec<typename PromoteNumeric<T, U>::type, D> sum, diff;
-        for (int i = 0; i != D; i++) {
-            sum[i] = fabs(data[i]) + fabs(rhs[i]);
-        }
-        diff = *this - rhs;
-        bool val = true;
-        for (int i = 0; i != D; i++) {
-            val = val && ((2 * fabs(diff[i]) / sum[i]) < epsilon);
-        } // if sum[i] = 0, we will get nan
-        return val;
-    }
-    
-    /*! \fn bool IsFinite() const
-     *  \brief determine if every element is finite */
-    bool IsFinite() const {
-        bool val = true;
-        for (int i = 0; i != D; i++) {
-            val = val && std::isfinite(data[i]);
-        }
-        return val;
-    }
-    
-    /*! \fn template <class U> bool operator == (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator == */
-    template <class U>
-    bool operator == (const SmallVec<U, D>& rhs) const {
-        bool val = true;
-        for (int i = 0; i != D; i++) {
-            val = val && (data[i] == rhs[i]);
-        }
-        return val;
-    }
-    
-    /*! \fn template <class U> bool operator != (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator != */
-    template <class U>
-    bool operator != (const SmallVec<U, D>& rhs) const {
-        return !(*this == rhs);
-    }
-    
-    /*! \fn template <class U> inline bool operator < (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator <, this is no point to compare each element. We compare the norm of vectors. */
-    template <class U>
-    inline bool operator < (const SmallVec<U, D>& rhs) const {
-        return (this->Norm() < rhs.Norm());
-    }
-    
-    /*! \fn template <class U> bool operator <= (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator <= */
-    template <class U>
-    bool operator <= (const SmallVec<U, D>& rhs) const {
-        if ((*this < rhs) || (*this == rhs)) return true;
-        return false;
-    }
-    
-    /*! \fn template <class U> inline bool operator > (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator >, this is no point to compare each element. We compare the norm of vectors. */
-    template <class U>
-    inline bool operator > (const SmallVec<U, D>& rhs) const {
-        return (this->Norm() > rhs.Norm());
-    }
-    
-    /*! \fn template <class U> bool operator >= (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator >= */
-    template <class U>
-    bool operator >= (const SmallVec<U, D>& rhs) const {
-        if((*this>rhs) || (*this==rhs)) return true;
-        return false;
-    }
-    
-    /*! \fn SmallVec<T, D> SetZeros()
-     *  \brief reset data to {0} */
-    SmallVec<T, D> SetZeros() {
-        for (int i = 0; i != D; i++) {
-            data[i] = 0;
-        }
-        return *this;
-    }
-    
-    /*! \fn template <class U, class V> bool InRange(U low, V high)
-     *  \brief return true if all elements are on [a, b] */
-    template <class U, class V>
-    bool InRange(U low, V high) {
-        bool val = true;
-        for (int i = 0; i != D; i++) {
-            val = val && (data[i] >= low && data[i] <= high);
-        }
-        return val;
-    }
-    
-    /*! \fn template <class U, class V> bool InRange(SmallVec<U, D> low, SmallVec<V, D> high)
-     *  \brief overloading InRange by taking SmallVec-type arguments instead of arithmetic type */
-    template <class U, class V>
-    bool InRange(SmallVec<U, D> low, SmallVec<V, D> high) {
-        bool val = true;
-        for (int i = 0; i != D; i++) {
-            val = val && (data[i] >= low[i] && data[i] <= high[i]);
-        }
-        return val;
-    }
-    
-    /*! \fn friend std::ostream& operator << (std::ostream& stream, const SmallVec<T, D>& vec)
-     *  \brief overloading ostream operator, keep the format settings (outside this function) from being destroyed by the non-numeric characters output */
-    friend std::ostream& operator << (std::ostream& stream, const SmallVec<T, D>& vec) {
-        std::streamsize tmp_width = stream.width(); // this function return std::streamsize type, which depends on machine
-        std::streamsize tmp_precision = stream.precision();
-        char tmp_fill = stream.fill();
-        std::ios::fmtflags tmp_flags = stream.flags();  // format flags like "scientific" and "left" and "showpoint"
-        
-        stream << std::setw(1);
-        stream << "(";
-        for (int i = 0; i < D-1; i++) {
-            stream.flags(tmp_flags);
-            stream << std::setfill(tmp_fill) << std::setprecision(static_cast<int>(tmp_precision)) << std::setw(static_cast<int>(tmp_width));
-            stream << vec.data[i];
-            stream << ", ";
-        }
-        stream.flags(tmp_flags);
-        stream << std::setfill(tmp_fill) << std::setprecision(static_cast<int>(tmp_precision)) << std::setw(static_cast<int>(tmp_width));
-        stream << vec.data[D-1];
-        stream << ")";
-        return stream;
-    }
-    
-    /*
-     * Overload a binary operator can be done either as a non-member function or a member function.
-     * For non-member function, all arguments are passed explicitly as the operator's operands. The lhs is the first argument and rhs is the second. To avoid the overhead of making a copy, operands are usually passed as reference. Take the addition as an example, "c = a + b" is equilavent to "c = operator+(a, b)".
-     * For member function, it is called by an object of the class. Since the object can be accessed in the function, it is in fact passed implicitly to the member function, hence overloading binary operator as a member function requires 1 (only rhs) or 3 arguments, otherwise the compiler gives warning. While calling the operator, the lhs is the object that calls the operator, the rhs is the very explicit argument (say only 1 argument). Take the addition as an example, "c = a + b" is equilavent to "c = a.operator+(b);"
-     * To avoid the complaint of compiler about member funtion with 2 arguments which overloads a binary operator, apply "friend" before the function declaration does the trick (e.g., operator << above). However, such an operator will have access to private part of this class.
-     */
-    
-};
-
-/*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator + (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs)
- *  \brief overloading binary operator + for class SmallVec */
-template <class T, class U, int D>
-inline SmallVec<typename PromoteNumeric<T, U>::type, D>
-operator + (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
-    SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i != D; i++) {
-        tmp.data[i] = lhs.data[i] + rhs.data[i];
-    }
-    return tmp;
-}
-
-/*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator - (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs)
- *  \brief overloading binary operator - for class SmallVec */
-template <class T, class U, int D>
-inline SmallVec<typename PromoteNumeric<T, U>::type, D>
-operator - (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
-    SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i != D; i++) {
-        tmp.data[i] = lhs.data[i] - rhs.data[i];
-    }
-    return tmp;
-}
-
-/*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator * (const SmallVec<T, D>& lhs, const U rhs)
- *  \brief overloading binary operator * for class SmallVec (times scalar) */
-template <class T, class U, int D>
-inline SmallVec<typename PromoteNumeric<T, U>::type, D>
-operator * (const SmallVec<T, D>& lhs, const U rhs) {
-    SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i <D ; i++) {
-        tmp.data[i] = lhs.data[i] * rhs;
-    }
-    return tmp;
-}
-
-/*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator * (const T lhs, const SmallVec<U, D>& rhs)
- *  \brief overloading binary operator * for (scalar times) class SmallVec */
-template <class T, class U, int D>
-inline SmallVec<typename PromoteNumeric<T, U>::type, D>
-operator * (const T lhs, const SmallVec<U, D>& rhs) {
-    SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i != D; i++) {
-        tmp.data[i] = lhs * rhs.data[i];
-    }
-    return tmp;
-}
-
-/*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator / (const SmallVec<T, D>& lhs, const U rhs)
- *  \brief overloading binary operator / for class SmallVec (divided by scalar) */
-template <class T, class U, int D>
-inline SmallVec<typename PromoteNumeric<T, U>::type, D>
-operator / (const SmallVec<T, D>& lhs, const U rhs) {
-    SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
-    for (int i = 0; i != D; i++) {
-        tmp.data[i] = lhs.data[i] / rhs;
-    }
-    return tmp;
-}
-
-/***********************************/
 /********** Particle Part **********/
 /***********************************/
 
@@ -522,6 +43,16 @@ public:
     /*! \var int id
      *  \brief particle ID in total particle set */
     int id;
+    
+    /*! \fn Particle<D>& operator = (const Particle &rhs)
+     *  \brief assignment operator = */
+    Particle<D>& operator = (const Particle &rhs) {
+        pos = rhs.pos;
+        vec = rhs.vec;
+        property_index = rhs.property_index;
+        density  = rhs.density;
+        return *this;
+    }
 };
 
 /*! \class template <int D> Plantesimal
@@ -560,9 +91,29 @@ class ParticleSet {
 private:
     
 public:
+    /*! \var using ivec = SmallVec<int, D>
+     *  \brief define a vector of int type */
+    using ivec = SmallVec<int, D>;
+    
+    /*! \var using fvec = SmallVec<float, D>
+     *  \brief define a vector of float type */
+    using fvec = SmallVec<float, D>;
+    
+    /*! \var using dvec = SmallVec<double, D>
+     *  \brief define a vector of double type */
+    using dvec = SmallVec<double, D>;
+    
     /*! \var int num_particle
-     *  \brief number of particles (must < 2^32-2) */
+     *  \brief number of particles */
     __uint32_t num_particle;
+    
+    /*! \var int num_ghost_particle
+     *  \brief number of ghost particles */
+    __uint32_t num_ghost_particle;
+    
+    /*! \var int num_ghost_particle
+     *  \brief number of total particles (must < 2^32-2) */
+    __uint32_t num_total_particle;
     
     /*! \var int num_type
      *  \brief number of particle types */
@@ -603,14 +154,14 @@ public:
     /*! \fn Particle<D> operator[] (const size_t i) const
      *  \brief define operator[] for easy access */
     Particle<D> operator[] (const size_t i) const {
-        assert(i < num_particle);
+        assert(i < num_total_particle);
         return *(particles+i);
     }
     
     /*! \fn Particle<D>& operator[] (const size_t i)
      *  \brief overload operator[] for element modification */
     Particle<D>& operator[] (const size_t i) {
-        assert(i < num_particle);
+        assert(i < num_total_particle);
         return *(particles+i);
     }
     
@@ -680,15 +231,12 @@ public:
             }
         }
         
-        progIO->log_info << ", total num_particle = " << num_particle << std::endl;
-        progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
+        num_total_particle = num_particle;
+        progIO->log_info << ", num_particle = " << num_particle << "; || ";
         
         AllocateSpace(num_particle);
         
-        // Second step, extend box limit to include ghost zone
-        
-        
-        // Thrid step, read particle data and duplicate ghost particles
+        // Thrid step, read particle data
         __uint32_t tmp_id = 0;
         Particle<D> *p;
         size_t triple_float = 3 * sizeof(float);
@@ -704,7 +252,7 @@ public:
                 content << lis_file.rdbuf();
                 std::string tmp_str = content.str();
                 const char *tmp_char = tmp_str.data();
-                for (int i = 0; i != tmp_num_particle; i++) {
+                for (__uint32_t i = 0; i != tmp_num_particle; i++) {
                     p = &particles[tmp_id];
                     std::memcpy((char*)p->pos.data, tmp_char, triple_float);
                     std::advance(tmp_char, triple_float);
@@ -724,7 +272,8 @@ public:
             }
         }
         
-        progIO->log_info << "id = " << particles[567].id << ", property_index = " << particles[567].property_index << ", rad = " << particles[567].density << ", pos = " << particles[567].pos << ", v = " << particles[567].vec << std::endl;
+        __uint32_t tmp_index = num_particle - 1;
+        progIO->log_info << "Last particle's info: id = " << particles[tmp_index].id << ", property_index = " << particles[tmp_index].property_index << ", rad = " << particles[tmp_index].density << ", pos = " << particles[tmp_index].pos << ", v = " << particles[tmp_index].vec << std::endl;
         progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
         
     }
@@ -757,8 +306,8 @@ public:
             progIO->log_info << "time = " << time << ", dt = " << dt;
             lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
             num_particle = static_cast<__uint32_t>(tmp_num_particle);
-            progIO->log_info << ", total num_particle = " << num_particle << std::endl;
-            progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
+            num_total_particle = num_particle;
+            progIO->log_info << ", num_particle = " << num_particle << "; || ";
             
             AllocateSpace(num_particle);
             
@@ -774,7 +323,7 @@ public:
             content << lis_file.rdbuf();
             std::string tmp_str = content.str();
             const char *tmp_char = tmp_str.data();
-            for (int i = 0; i != tmp_num_particle; i++) {
+            for (__uint32_t i = 0; i != tmp_num_particle; i++) {
                 p = &particles[tmp_id];
                 std::memcpy((char*)p->pos.data, tmp_char, triple_float);
                 std::advance(tmp_char, triple_float);
@@ -793,7 +342,8 @@ public:
             exit(3); // cannot open file
         }
         
-        progIO->log_info << "id = " << particles[567].id << ", property_index = " << particles[567].property_index << ", rad = " << particles[567].density << ", pos = " << particles[567].pos << ", v = " << particles[567].vec << std::endl;
+        __uint32_t tmp_index = num_particle - 1;
+        progIO->log_info << "Last particle's info: id = " << particles[tmp_index].id << ", property_index = " << particles[tmp_index].property_index << ", rad = " << particles[tmp_index].density << ", pos = " << particles[tmp_index].pos << ", v = " << particles[tmp_index].vec << std::endl;
         progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
     }
     
@@ -815,12 +365,107 @@ public:
         
         progIO->physical_quantities[loop_count].time = time;
         progIO->physical_quantities[loop_count].dt = dt;
+        
+        progIO->numerical_parameters.box_min = SmallVec<double, D>(coor_lim[6], coor_lim[8], coor_lim[10]);
+        progIO->numerical_parameters.box_max = SmallVec<double, D>(coor_lim[7], coor_lim[9], coor_lim[11]);
+        progIO->numerical_parameters.box_center = (progIO->numerical_parameters.box_min + progIO->numerical_parameters.box_max ) / 2.0;
+        progIO->numerical_parameters.box_length = progIO->numerical_parameters.box_max - progIO->numerical_parameters.box_min;
+        progIO->numerical_parameters.CalculateNewParameters();
     }
     
-    /*! \fn void MakeGhostParticles(const double ghost_zone_ratio)
-     *  \brief make ghost particles for ghost zone */
-    void MakeGhostParticles(const double ghost_zone_ratio) {
+    /*! \fn void MakeGhostParticles(const NumericalParameters &paras)
+     *  \brief make ghost particles for ghost zone based on ghost zone size
+     *  Note this function assumes we are dealing with 3D data. We can implement more if there are other situations. */
+    void MakeGhostParticles(const NumericalParameters &paras) {
+        Particle<D> *ghost_particles = new Particle<D>[3*num_particle]; // The worst case is that one particle has three ghost partners, under the assumption that we don't use periodic boudary conditions for the vertical direction.
+        __uint32_t tmp_id = num_particle, ghost_id = 0;
         
+        fvec non_ghost_width = paras.box_half_width - fvec(paras.ghost_zone_width);
+        fvec non_ghost_min = paras.box_center - non_ghost_width;
+        fvec non_ghost_max = paras.box_center + non_ghost_width;
+        
+        // Firstly, we make ghost particles for radial direction which need shear mapping
+        for (__uint32_t i = 0; i != num_particle; i++) {
+            if (particles[i].pos[0] < non_ghost_min[0]) {
+                ghost_particles[ghost_id] = particles[i];
+                ghost_particles[ghost_id].id = tmp_id++;
+                ghost_particles[ghost_id].pos[0] += paras.box_length[0];
+                float new_y = ghost_particles[ghost_id].pos[1] + paras.shear_speed * time;
+                // new_y = new_y [- ymin] - int( (new_y - ymin) / L_Y ) * L_Y [+ ymin]
+                ghost_particles[ghost_id].pos[1] = new_y - static_cast<int>((new_y - paras.box_min[1]) / paras.box_length[1]) * paras.box_length[1];
+                ghost_id++;
+            }
+            if (particles[i].pos[0] > non_ghost_max[0]) {
+                ghost_particles[ghost_id] = particles[i];
+                ghost_particles[ghost_id].id = tmp_id++;
+                ghost_particles[ghost_id].pos[0] -= paras.box_length[0];
+                float new_y = ghost_particles[ghost_id].pos[1] - paras.shear_speed * time;
+                // new_y = [ymax -] ( ([ymax -] new_y) + int( (ymax - new_y) / L_Y ) * L_Y )
+                ghost_particles[ghost_id].pos[1] = new_y + static_cast<int>((paras.box_max[1] - new_y) / paras.box_length[1]) * paras.box_length[1];
+                ghost_id++;
+            }
+        }
+        
+        // Secondly, we make ghost particles for other direction
+        // note that ghost particles may also produce ghost particles
+        __uint32_t tmp_num_ghost_particle = ghost_id;
+        for (__uint32_t i = 0; i != tmp_num_ghost_particle; i++) {
+            if (ghost_particles[i].pos[1] < non_ghost_min[1]) {
+                ghost_particles[ghost_id] = ghost_particles[i];
+                ghost_particles[ghost_id].id = tmp_id++;
+                ghost_particles[ghost_id].pos[1] += paras.box_length[1];
+                ghost_id++;
+            }
+            if (ghost_particles[i].pos[1] > non_ghost_max[1]) {
+                ghost_particles[ghost_id] = ghost_particles[i];
+                ghost_particles[ghost_id].id = tmp_id++;
+                ghost_particles[ghost_id].pos[1] -= paras.box_length[1];
+                ghost_id++;
+            }
+        }
+        
+        for (__uint32_t i = 0; i != num_particle; i++) {
+            if (particles[i].pos[1] < non_ghost_min[1]) {
+                ghost_particles[ghost_id] = particles[i];
+                ghost_particles[ghost_id].id = tmp_id++;
+                ghost_particles[ghost_id].pos[1] += paras.box_length[1];
+                ghost_id++;
+            }
+            if (particles[i].pos[1] > non_ghost_max[1]) {
+                ghost_particles[ghost_id] = particles[i];
+                ghost_particles[ghost_id].id = tmp_id++;
+                ghost_particles[ghost_id].pos[1] -= paras.box_length[1];
+                ghost_id++;
+            }
+        }
+        
+        num_total_particle = tmp_id;
+        num_ghost_particle = ghost_id;
+        assert(num_total_particle == num_particle + num_ghost_particle);
+        
+        progIO->log_info << "Finish making ghost particles: num_ghost_particle = " << num_ghost_particle << ", and now num_total_particle = " << num_total_particle << std::endl;
+        progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+        
+        // Thirdly, combine particles and ghost_particles
+        Particle<D> *tmp_particles = new Particle<D>[num_particle];
+        std::memcpy(tmp_particles, particles, sizeof(Particle<D>)*num_particle);
+        AllocateSpace(num_total_particle);
+        std::memcpy(particles, tmp_particles, sizeof(Particle<D>)*num_particle);
+        std::memcpy(particles+num_particle, ghost_particles, sizeof(Particle<D>)*num_ghost_particle);
+        
+        /* this is a small check for ghost particles
+        fvec box_limit = paras.box_max + fvec(paras.ghost_zone_width);
+        for (__uint32_t i = num_ghost_particle; i != num_total_particle; i++) {
+            assert (particles[i].pos <= box_limit);
+        }
+         */
+        
+        // Fourly, release memory
+        delete [] ghost_particles;
+        ghost_particles = nullptr;
+        delete [] tmp_particles;
+        tmp_particles = nullptr;
+
     }
     
 };
@@ -1299,7 +944,7 @@ public:
             
             if (tree[__parent].first_daughter == 0) {
                 // first daughter
-                assert(tree[__parent].num_daughter = 0);
+                assert(tree[__parent].num_daughter == 0);
                 tree[__parent].first_daughter = daughter;
                 tree[__parent].num_daughter = 1;
             } else {
@@ -1340,22 +985,22 @@ public:
         }
     }
     
-    /*! \fn void BuildTree(const dvec __center, const double __half_width, ParticleSet<D> &particle_set, const int __max_leaf_size)
+    /*! \fn void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set, const int __max_leaf_size)
      *  \brief build tree from particle data */
-    void BuildTree(const dvec __center, const double __half_width, ParticleSet<D> &particle_set, const int __max_leaf_size) { // double underscore here is to avoid confusion with all sorts of members
+    void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set, const int __max_leaf_size) { // double underscore here is to avoid confusion with all sorts of members
         Reset();
-        half_width = __half_width;
-        root_center = __center;
+        half_width = paras.max_half_width + paras.ghost_zone_width;
+        root_center = paras.box_center;
         max_leaf_size = __max_leaf_size;
         
-        assert(particle_set.num_particle < (__uint32_t)0xffffffff);
-        num_particle = particle_set.num_particle;
+        assert(particle_set.num_total_particle < (__uint32_t)0xffffffff);
+        num_particle = particle_set.num_total_particle;
         particle_list = new InternalParticle[num_particle];
         
-        for (int i = 0; i != num_particle; i++) {
+        for (__uint32_t i = 0; i != num_particle; i++) {
             particle_list[i].pos = particle_set[i].pos;
             particle_list[i].mass = particle_set[i].property_index;
-            particle_list[i].id = i; // original index of particles
+            particle_list[i].id = particle_set[i].id; // original index of particles, after sorting by morton key, the order changes
         }
         
         // compute Morton Keys and sort particle_list by Morton order
@@ -1405,13 +1050,14 @@ public:
         p->half_width = half_width;
         p->begin = 0;
         p->end = num_particle;
-        p->parent = -1;
+        p->parent = -1; // 4294967295
         
         // run through the data again to build the tree
         num_leaf_nodes = 0;
         FillTree(root_level, 0, num_particle, root, root_center, 0.5*half_width);
         assert(node_ptr + 1 == num_nodes);
         delete [] morton;
+        morton = nullptr;
     }
     
     /*! \fn bool Within(const dvec __pos, const dvec node_center, const double __half_width)
@@ -1441,11 +1087,11 @@ public:
         for (int daughter = tree[node].first_daughter; daughter != tree[node].first_daughter + tree[node].num_daughter; daughter++) {
             dvec tmp_center = node_center;
             for (int d = 0; d != D; d++) {
-                tmp_center[d] += 0.5 * __half_width * Orthant<D>::orthant[tree[daughter].orthant][d];
-                dvec daughter_center = tree[daughter].center;
-                assert(tmp_center == daughter_center);
-                CheckTree(daughter, __level+1, daughter_center, 0.5*__half_width);
+                tmp_center[d] += 0.5 * __half_width * Orthant<D>::orthants[tree[daughter].orthant][d];
             }
+            dvec daughter_center = tree[daughter].center;
+            assert(tmp_center == daughter_center);
+            CheckTree(daughter, __level+1, daughter_center, 0.5*__half_width);
         }
     }
     
@@ -1478,7 +1124,7 @@ public:
         }
         
         // else recurse into the correct direction
-        int orthant = Key8Level(__morton, __level);
+        int orthant = this->Key8Level(__morton, __level);
         int daughter = -1;
         for (int d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
             if (tree[d].orthant == orthant) {
@@ -1497,7 +1143,7 @@ public:
      *  \brief given position, find the index of node containing it */
     __uint32_t Pos2Node(const dvec __pos) {
         assert( Within(__pos, root_center, half_width));
-        typename MortonKey<D>::morton_key __morton = Morton(__pos, 0); // index doesn't matter here, just give 0
+        typename MortonKey<D>::morton_key __morton = this->Morton(__pos, 0); // index doesn't matter here, just give 0
         return Key2Leaf(__morton, root, root_level);
     }
     
@@ -1618,7 +1264,7 @@ public:
         do {
             ClearHeaps();
             heaps.reserve(knn);
-            TraverseKNN(__pos, root, max_dr, knn);
+            RecursiveKNN(__pos, root, max_dr, knn);
             max_dr2 *= 2;
         } while (heaps.size() < knn);
         

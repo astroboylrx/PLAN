@@ -11,6 +11,32 @@
 
 #include "global.hpp"
 
+
+/*****************************************/
+/********** NumericalParameters **********/
+/*****************************************/
+
+/*! \fn NumericalParameters()
+ *  \brief constructor */
+NumericalParameters::NumericalParameters()
+{
+    ;
+}
+
+/*! \fn void CalculateNewParameters()
+ *  \brief calculate new parameters based on box shape */
+void NumericalParameters::CalculateNewParameters()
+{
+    box_half_width = box_length / 2.0;
+    max_half_width = 0.0;
+    for (int i = 0; i != dim; i++) {
+        max_half_width = std::max(max_half_width, box_half_width[i]);
+    }
+    shear_speed = q * Omega * box_length[0];
+}
+
+
+
 /*****************************************/
 /********** Basic_IO_Operations **********/
 /*****************************************/
@@ -37,6 +63,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"Combined", no_argument, &flags.combined_flag, 1},
         {"Find_Clumps", no_argument, &flags.find_clumps_flag, 1},
         {"Basic_Analyses", no_argument, &flags.basic_analyses_flag, 1},
+        {"Help", no_argument, &flags.help_flag, 1},
         // These options don't set a flag
         {"num_cpu", required_argument, 0, 'c'},
         {"data_dir", required_argument, 0, 'i'},
@@ -44,6 +71,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"postname", required_argument, 0, 'p'},
         {"file_num", required_argument, 0, 'f'},
         {"output", required_argument, 0, 'o'},
+        {"InputConst", required_argument, 0, 't'},
 #ifdef SMR_ON
         {"level", required_argument, 0, 'l'},
         {"domain", required_argument, 0, 'd'},
@@ -62,9 +90,9 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
             int option_index = 0;
 #ifndef SMR_ON
             // remember add ":" after the letter means this option has argument after it
-            tmp_option = getopt_long(argc, (char *const *)argv, "c:i:b:p:f:o:", long_options, &option_index);
+            tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:h", long_options, &option_index);
 #else // SMR_ON
-            tmp_option = getopt_long(argc, (char *const *)argv, "c:i:b:p:f:o:l:d:", long_options, &option_index);
+            tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:hl:d:", long_options, &option_index);
 #endif // SMR_ON
             if (tmp_option == -1) {
                 break;
@@ -72,16 +100,18 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
             
             switch (tmp_option) {
                 case 0: {
-                    // if this option set a flag, do nothing else now
+                    log_info << "Set flag \"" << long_options[option_index].name << "\"";
+                    //if (optarg) {
+                    //    log_info << " with arg " << optarg;
+                    //}
+                    log_info << std::endl;
+                    // if we don't need output: "this option set a flag, do nothing else now"
                     if (long_options[option_index].flag != 0) {
                         break;
+                    } else {
+                        error_message << "Error: something wrong with non-flag option " << long_options[option_index].name << " which might be supposed to be a flag." << std::endl;
+                        Output(std::cerr, error_message, __normal_output, __master_only);
                     }
-                    log_info << "option " << long_options[option_index].name;
-                    if (optarg) {
-                        out_content << " with arg " << optarg;
-                    }
-                    log_info << "\n";
-                    break;
                 }
                 case 'c': {
                     std::istringstream tmp_iss;
@@ -146,6 +176,15 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
                     log_info << "output_file_path is " << file_name.output_file_path << "\n";
                     break;
                 }
+                case 't': {
+                    file_name.input_const_path.assign(optarg);
+                    log_info << "input_const_path is " << file_name.input_const_path << "\n";
+                    break;
+                }
+                case 'h':{
+                    flags.help_flag = 1;
+                    break;
+                }
 #ifdef SMR_ON
                 case 'l': {
                     file_name.data_level.assign(optarg);
@@ -158,32 +197,38 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
                     break;
                 }
 #endif // SMR_ON
-                case '?': {
-                    
-                    if (optopt == 'c' || optopt == 'i' || optopt == 'b' || optopt == 'p' || optopt == 'f' || optopt == 'o'
-#ifdef SMR_ON
-                        || optopt == 'l' || optopt == 'd'
-#endif // SMR_ON
-                        ) {
-                        error_message << "Error: Option -" << optopt << " requires an arugment.\n";
-                        Output(std::cerr, error_message, __normal_output, __master_only);
-                    } else if (isprint (optopt)) {
-                        error_message << "Error: Unknown option -" << optopt << "\n";
-                        Output(std::cerr, error_message, __normal_output, __master_only);
-                    } else {
-                        error_message << "Error: Unknown option character " << optopt << "\n";
-                        Output(std::cerr, error_message, __normal_output, __master_only);
-                    }
+#if 0 // comment this out to enable case 1
+                case 1:
+                    /*
+                     * Use this case if getopt_long() should go through all arguments. If so, add a leading '-' character to optstring.
+                     * Actual code, if any, goes here.
+                     */
+                    break;
+#endif // 0
+                case ':': { // missing option argument (to enable case ':', put a leading ':' in optstring
+                    error_message << "Error: Option -" << optopt << " requires an arugment.\n";
+                    Output(std::cerr, error_message, __normal_output, __master_only);
                     exit(2); // cannot execute
                 }
+                case '?': // invalid option
                 default: {
-                    error_message << tmp_option << "\nError: Argument wrong.\n";
-                    Output(std::cerr, error_message, __normal_output, __master_only);
+                    if (!isprint(optopt)) {
+                        error_message << "Error: Unknown/invalid flag, check usage with --Help or -h.\n";
+                        Output(std::cerr, error_message, __normal_output, __master_only);
+                    } else {
+                        error_message << "Error: Unknown/invalid option -" << static_cast<char>(optopt) << "\n";
+                        Output(std::cerr, error_message, __normal_output, __master_only);
+                    }
                     exit(2); // cannot execute
                 }
             }
         }
         
+        // check if need help
+        if (flags.help_flag) {
+            PrintUsage(argv[0]);
+            exit(0);
+        }
         // determine ostream level before first Output()
         if (flags.verbose_flag) {
             ostream_level = __more_output;
@@ -200,12 +245,13 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         Output(std::clog, log_info, __more_output, __master_only);
         PrintStars(std::clog, __more_output);
         if (optind < argc) {
-            log_info << "Non-option ARGV-elements: ";
+            error_message << "Non-option ARGV-elements: ";
             while (optind < argc) {
-                log_info << argv[optind++];
+                error_message << argv[optind++];
             }
-            log_info << "\n";
-            Output(std::clog, log_info, __normal_output, __master_only);
+            error_message << "\nSomething is wrong with the argument list. Check usage by --Help or -h.\n";
+            Output(std::cerr, error_message, __normal_output, __master_only);
+            exit(2); // cannot execute
         }
     } // if (argc < 13)
     
@@ -219,17 +265,20 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
  *  \brief print usage if required argument is missing */
 void Basic_IO_Operations::PrintUsage(const char *program_name)
 {
-    out_content << "USAGE: " << program_name
-    << " -c <num_cpu> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [flags]\n"
-    << "Example: ./plan -c 64 -i ./ -b Par_Strat3d -p ds -f 170:227 -o result.txt\n"
-    << "Use --Verbose to obtain more output during executation"
-    << "Use --Debug to obtain all possbile output during executation"
-    << "Use --Combined to deal with combined lis files (from all processors"
-    << "Use --Find_Clumps to run clump finding functions"
-    << "Use --Basic_Analyses to perform basic analyses, which will output max($\rho_p$) and $H_p$";
+    out_content << "USAGE: \n" << program_name
+    << " -c <num_cpu> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> --flags]\n"
+    << "Example: ./plan -c 64 -i ./bin/ -b Par_Strat3d -p ds -f 170:227 -o result.txt --Verbose\n"
+    << "[...] means optional arguments. Available flags: \n"
+    << "Use --Help to obatin this usage information\n"
+    << "Use --Verbose to obtain more output during executation\n"
+    << "Use --Debug to obtain all possbile output during executation\n"
+    << "Use --Combined to deal with combined lis files (from all processors\n"
+    << "Use --Find_Clumps to run clump finding functions\n"
+    << "Use --Basic_Analyses to perform basic analyses, which will output max($\\rho_p$) and $H_p$\n"
+    << "If you don't specify any flags, then --Find_Clumps will be turned on automatically.";
     out_content << std::endl;
     Output(std::cout, out_content, __normal_output, __master_only);
-    exit(2); // cannot execute
+    exit(0); // cannot execute
 }
 
 /*! \fn void Output(std::ostream &stream, std::ostringstream &content, const OutputLevel &output_level, const MPI_Level &mpi_level)
