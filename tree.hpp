@@ -832,7 +832,7 @@ public:
     
     /*! \fn BHtree()
      *  \brief constructor, about the member initializer lists, refer to http://en.cppreference.com/w/cpp/language/initializer_list */
-    BHtree() : tree(nullptr), morton(nullptr), leaf_nodes(nullptr), node2leaf(nullptr), particle_list(nullptr) {
+    BHtree() : morton(nullptr), particle_list(nullptr), tree(nullptr), leaf_nodes(nullptr), node2leaf(nullptr) {
         max_daughters = (1<<D);
         root = 0;
         root_level = 1;

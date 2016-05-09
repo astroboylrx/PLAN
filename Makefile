@@ -1,10 +1,10 @@
 CXX	  = mpicxx
 
-OPTIMIZE  = -O3 -m64 -Wall -g
+OPTIMIZE  = -O3 -m64 -Wall #-g
 
-SOURCES   = main.cpp global.cpp fileop.cpp tree.cpp
+SOURCES   = main.cpp global.cpp tree.cpp analyses.cpp
 OBJECTS   = $(SOURCES:.cpp=.o)
-INCL      = global.hpp fileop.hpp tree.hpp
+INCL      = global.hpp tree.hpp analyses.hpp
 
 CXXFLAGS  = -std=c++11 -I/opt/local/include/gcc5 -I/opt/local/include/libomp -I/opt/local/include/mpich-mp
 LDFLAGS   = -L/opt/local/lib/gcc5 -L/opt/local/lib/libomp -L/opt/local/lib/mpich-mp
@@ -12,7 +12,7 @@ LIBS      = -lm -lmpicxx -lmpi -lpmpi
 
 OPTIONS   = -DMPI_ON
 
-EXEC      = plato
+EXEC      = plan
 
 all: $(SOURCES) $(EXEC)
 
