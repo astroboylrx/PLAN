@@ -35,7 +35,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-//#define MPI_ON // Comment out this line before committing!!
+#define MPI_ON // Comment out this line before committing!!
 #ifdef MPI_ON // "ifdef" options are defined during compilation
 #include "mpi.h"
 #endif // MPI_ON

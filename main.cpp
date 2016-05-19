@@ -61,26 +61,28 @@ int main(int argc, const char * argv[])
         particle_set.ReadLisFile(loop_count);
         BasicAnalyses(particle_set, loop_count);
         
-        particle_set.MakeGhostParticles(progIO->numerical_parameters);
-        tree.BuildTree(progIO->numerical_parameters, particle_set, (1<<dim));
-        tree.CheckTree(tree.root, tree.root_level, tree.root_center, tree.half_width);
-        
-        double min_distance = 0, tmp_min_distance = 0;
-        int indices[3];
-        for (__uint32_t i = 0; i != particle_set.num_particle; i++) {
-            tree.KNN_Search(particle_set[i].pos, 1, tmp_min_distance, indices);
-            min_distance = std::min(min_distance, tmp_min_distance);
-        }
-        std::cout << "Test for min_distance: " << min_distance << std::endl;
-        
-        /***** Step III-B, identity high density region and find planetesimals *****/
-        tree.FindPlanetesimals();
-        
+        if (progIO->flags.find_clumps_flag) {
+            
+            particle_set.MakeGhostParticles(progIO->numerical_parameters);
+            tree.BuildTree(progIO->numerical_parameters, particle_set, 1<<dim);
+            tree.CheckTree(tree.root, tree.root_level, tree.root_center, tree.half_width);
+            
+            double min_distance = progIO->numerical_parameters.box_length[0], tmp_min_distance = 0;
+            int indices[3];
+            for (__uint32_t i = 0; i != particle_set.num_particle; i++) { // particle_set.num_particle
+                tree.KNN_Search(particle_set[i].pos, 2, tmp_min_distance, indices);
+                min_distance = std::min(min_distance, tmp_min_distance);
+            }
+            progIO->log_info << "Test for min_distance_between_particles in data: " << min_distance << std::endl;
+            progIO->Output(std::clog, progIO->log_info, __normal_output, __all_processors);
+            
+            /***** Step III-B, identity high density region and find planetesimals *****/
+            tree.FindPlanetesimals();
+            
+        } // if (progIO->flags.find_clumps_flag)
         
     }
 
-    
-    
     /********** Step IV: Post-loop Work **********/
     BasicAnalysesPostWork();
     

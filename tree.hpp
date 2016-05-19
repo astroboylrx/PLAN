@@ -905,7 +905,7 @@ public:
             if (count <= max_leaf_size) {
                 num_leaf_nodes++; // only nodes with leaves < max_leaf_size are leaves
             } else {
-                CountNodesLeaves(__level+1, __begin-count, __begin-1);
+                CountNodesLeaves(__level+1, __begin-count, __begin);
             }
             
             if (__begin < __end) {
@@ -975,7 +975,7 @@ public:
                 num_leaf_nodes++;
             } else {
                 // node with > max_leaf_size particles is a branch
-                FillTree(p->level, __begin-count, __begin-1, daughter, p->center, 0.5*__half_width);
+                FillTree(p->level, __begin-count, __begin, daughter, p->center, 0.5*__half_width);
             }
             
             // now next daughter of this node
@@ -1081,6 +1081,7 @@ public:
         for (int p = tree[node].begin; p != tree[node].end; p++) {
             if (!Within(particle_list[p].pos, node_center, __half_width)) {
                 progIO->error_message << "Particle " << particle_list[p].pos << " outside node " << node_center << " with width " << 2*tree[node].half_width;
+                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
             }
         }
         
