@@ -1,6 +1,6 @@
 //
 //  tree.hpp
-//  PLAN: PLantesimal ANalyzer
+//  PLAN: PLanetesimal ANalyzer
 //
 //  Created by Rixin Li on 3/11/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
@@ -55,15 +55,15 @@ public:
     }
 };
 
-/*! \class template <int D> Plantesimal
- *  \brief data for one plantesimal structure */
+/*! \class template <int D> Planetesimal
+ *  \brief data for one planetesimal structure */
 template <int D>
-class Plantesimal {
+class Planetesimal {
 private:
     
 public:
     /*! \var std::vector<__uint32_t> indices
-     *  \brief indices of particles that belongs to this plantesimals */
+     *  \brief indices of particles that belongs to this planetesimals */
     std::vector<__uint32_t> indices;
     
     /*! \var SmallVec<double, D> center
@@ -766,7 +766,7 @@ public:
     typename MortonKey<D>::morton_key *morton;
     
     /*! \var int num_particle
-     *  \brief number of particles (must < 2^32-2) 
+     *  \brief number of particles (must < 2^32-2)
      *  This must < 2^32-1-1 = 0xffffffff-1, because (*TreeNode)->end means the off-the-end iterator, so we need one more number than the total number of particles. Anyway, if we are dealing with more particles than that, we should adapt our tools and use more advanced Morton Keys */
     __uint32_t num_particle;
     
@@ -875,7 +875,7 @@ public:
      *  \brief sort points by morton key and then copy back to particle list */
     void SortPoints() {
         InternalParticle *tmp = new InternalParticle[num_particle];
-        for (int i = 0; i != num_particle; i++) {
+        for (__uint32_t i = 0; i != num_particle; i++) {
             tmp[i] = particle_list[this->ParticleIndex(morton[i])];
         }
         std::memcpy(particle_list, tmp, sizeof(InternalParticle)*num_particle);
@@ -1007,11 +1007,11 @@ public:
         this->InitMortonKey(root_center-dvec(half_width), root_center+dvec(half_width));
         morton = new typename MortonKey<D>::morton_key[num_particle];
         
-        for (int i = 0; i != num_particle; i++) {
+        for (__uint32_t i = 0; i != num_particle; i++) {
             morton[i] = this->Morton(particle_list[i].pos, i);
         }
         std::sort(&(morton[0]), &(morton[num_particle]), AscendingMorton());
-        for (int i = 0; i != num_particle-1; i++) {
+        for (__uint32_t i = 0; i != num_particle-1; i++) {
             assert((morton[i]<<32) < (morton[i+1]<<32));
         }
         SortPoints();
@@ -1078,14 +1078,14 @@ public:
         assert(tree[node].level == __level);
         assert(tree[node].half_width == __half_width);
         
-        for (int p = tree[node].begin; p != tree[node].end; p++) {
+        for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
             if (!Within(particle_list[p].pos, node_center, __half_width)) {
                 progIO->error_message << "Particle " << particle_list[p].pos << " outside node " << node_center << " with width " << 2*tree[node].half_width;
                 progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
             }
         }
         
-        for (int daughter = tree[node].first_daughter; daughter != tree[node].first_daughter + tree[node].num_daughter; daughter++) {
+        for (__uint32_t daughter = tree[node].first_daughter; daughter != tree[node].first_daughter + tree[node].num_daughter; daughter++) {
             dvec tmp_center = node_center;
             for (int d = 0; d != D; d++) {
                 tmp_center[d] += 0.5 * __half_width * Orthant<D>::orthants[tree[daughter].orthant][d];
@@ -1127,7 +1127,7 @@ public:
         // else recurse into the correct direction
         int orthant = this->Key8Level(__morton, __level);
         int daughter = -1;
-        for (int d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+        for (__uint32_t d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
             if (tree[d].orthant == orthant) {
                 daughter = Key2Leaf(__morton, d, __level+1);
                 break;
@@ -1192,9 +1192,9 @@ public:
         }
     };
     
-    /*! \fn void Add2Heaps(const int knn, const int i, const double dr2)
+    /*! \fn void Add2Heaps(const unsigned int knn, const int i, const double dr2)
      *  \brief add element to heaps */
-    void Add2Heaps(const int knn, const int i, const double dr2) {
+    void Add2Heaps(const unsigned int knn, const int i, const double dr2) {
         if (heaps.size() < knn) {
             heaps.push_back(std::pair<int, double>(i, dr2));
             std::push_heap(heaps.begin(), heaps.end(), less_second<int, double>());
@@ -1220,20 +1220,20 @@ public:
     void RecursiveKNN(const dvec __pos, const int node, const double dist, const int knn) {
         if (SphereNodeIntersect(__pos, dist, node)) {
             if (IsLeaf(node)) {
-                for (int p = tree[node].begin; p != tree[node].end; p++) {
+                for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
                     Add2Heaps(knn, p, (__pos-particle_list[p].pos).Norm2());
                 }
             } else {
-                for (int d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+                for (__uint32_t d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
                     RecursiveKNN(__pos, d, dist, knn);
                 }
             }
         }
     }
     
-    /*! \fn void KNN_Search(const dvec __pos, const int knn, double &radius_knn, int *indices)
+    /*! \fn void KNN_Search(const dvec __pos, const unsigned int knn, double &radius_knn, int *indices)
      *  \brief given position, perform k-nearest neighbours search and return radius and particle indices */
-    void KNN_Search(const dvec __pos, const int knn, double &radius_knn, int *indices) {
+    void KNN_Search(const dvec __pos, const unsigned int knn, double &radius_knn, int *indices) {
         assert(knn <= num_particle);
         
         if (heaps.size() != 0) {
@@ -1249,7 +1249,7 @@ public:
             if (NodeSize(node) == 1) {
                 node = tree[node].parent;
             }
-            for (int p = tree[node].begin; p != tree[node].end; p++) {
+            for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
                 max_dr2 = std::max(max_dr2, (__pos - particle_list[p].pos).Norm2());
             }
         } else {
@@ -1272,7 +1272,7 @@ public:
         // Phil did TraverseKNN once more, but I don't see the necessity...
         
         // get original particle id
-        for (int i = 0; i != heaps.size(); i++) {
+        for (unsigned int i = 0; i != heaps.size(); i++) {
             indices[i] = particle_list[heaps[i].first].id;
         }
         radius_knn = sqrt(heaps.front().second);
@@ -1308,7 +1308,8 @@ public:
     }
     
     /*! \fn void FindPlanetesimals()
-     *  \brief find plantesimals inside data */
+     *  \brief find planetesimals in particle data
+     *  For planetesimals, whether that sub-overdensity regions heavily reside inside larger overdensity regions remains unclear. For simplicity, we will only use spatial information to idensity planetesimals at first.  */
     void FindPlanetesimals() {
         // Get high density regions by sorting dpar
         

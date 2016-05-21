@@ -1,6 +1,6 @@
 //
 //  global.hpp
-//  PLAN: PLantesimal ANalyzer
+//  PLAN: PLanetesimal ANalyzer
 //
 //  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
@@ -35,7 +35,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#define MPI_ON // Comment out this line before committing!!
+//#define MPI_ON // Comment out this line before committing!!
 #ifdef MPI_ON // "ifdef" options are defined during compilation
 #include "mpi.h"
 #endif // MPI_ON

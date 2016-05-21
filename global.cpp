@@ -1,6 +1,6 @@
 //
 //  global.cpp
-//  PLAN: PLantesimal ANalyzer
+//  PLAN: PLanetesimal ANalyzer
 //
 //  Created by Rixin Li on 4/26/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.

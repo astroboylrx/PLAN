@@ -1,6 +1,6 @@
 //
 //  analyses.hpp
-//  PLAN: PLantesimal ANalyzer
+//  PLAN: PLanetesimal ANalyzer
 //
 //  Created by Rixin Li on 5/4/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
@@ -19,10 +19,11 @@
  *  \brief open default result file and write file header */
 void BasicAnalysesPreWork();
 
-/*! \fn void template <int dim> BasicAnalyses(ParticleSet<dim> &particle_set, int loop_count)
+/*! \fn template <int D> void BasicAnalyses(ParticleSet<dim> &particle_set, int loop_count)
  *  \brief calculate max($\rho_p$) and $H_p$ */
-template <int dim>
-void BasicAnalyses(ParticleSet<dim> &particle_set, int loop_count) {
+template <int D>
+void BasicAnalyses(ParticleSet<D> &particle_set, int loop_count)
+{
     // N.B. use reference to particle_set to avoid unwanted changes to members in it after calling this function
     
     if (!progIO->flags.basic_analyses_flag) {
@@ -72,5 +73,24 @@ void BasicAnalyses(ParticleSet<dim> &particle_set, int loop_count) {
 /*! \fn void BasicAnalysesPostWork()
  *  \brief close default result file  */
 void BasicAnalysesPostWork();
+
+/*! \fn template <int D> void MinDistanceBetweenParticles(ParticleSet<dim> &particle_set, 
+ *  \brief find the minimum distance between particles in data */
+template <int D>
+void MinDistanceBetweenParticles(ParticleSet<D> &particle_set, BHtree<D> &tree, int loop_count)
+{
+    if (!progIO->flags.basic_analyses_flag) {
+        return;
+    }
+    
+    double min_distance = progIO->numerical_parameters.max_half_width, tmp_min_distance = 0;
+    int indices[3];
+    for (__uint32_t i = 0; i != particle_set.num_particle; i++) {
+        tree.KNN_Search(particle_set[i].pos, 2, tmp_min_distance, indices); // the closest one is itself
+        min_distance = std::min(min_distance, tmp_min_distance);
+    }
+    progIO->log_info << "loop_count = " << loop_count << ", min_distance_between_particles in data = " << min_distance << std::endl;
+    progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+}
 
 #endif /* analyses_hpp */

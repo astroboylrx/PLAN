@@ -1,6 +1,6 @@
 //
 //  main.cpp
-//  PLAN: PLantesimal ANalyzer
+//  PLAN: PLanetesimal ANalyzer
 //
 //  Created by Rixin Li on 3/8/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
@@ -49,33 +49,24 @@ int main(int argc, const char * argv[])
     mpi->DetermineLoop(progIO->num_file);
     ParticleSet<dim> particle_set;
     BHtree<dim> tree;
-    std::vector<Plantesimal<dim>> plantesimals;
+    std::vector<Planetesimal<dim>> planetesimals;
     
     /********** Step II: Pre-loop Work **********/
     BasicAnalysesPreWork();
     const SmallVec<float, dim> box_center(0.0);
     /********** Step III: Loop files, read data and process it **********/
     for (int loop_count = mpi->loop_begin; loop_count <= mpi->loop_end; loop_count += mpi->loop_step) {
-        /***** Step III-A, read original data and perform basic analyses *****/
         
+        /***** Step III-A, read original data and perform basic analyses *****/
         particle_set.ReadLisFile(loop_count);
         BasicAnalyses(particle_set, loop_count);
         
         if (progIO->flags.find_clumps_flag) {
-            
             particle_set.MakeGhostParticles(progIO->numerical_parameters);
             tree.BuildTree(progIO->numerical_parameters, particle_set, 1<<dim);
             tree.CheckTree(tree.root, tree.root_level, tree.root_center, tree.half_width);
-            
-            double min_distance = progIO->numerical_parameters.box_length[0], tmp_min_distance = 0;
-            int indices[3];
-            for (__uint32_t i = 0; i != particle_set.num_particle; i++) { // particle_set.num_particle
-                tree.KNN_Search(particle_set[i].pos, 2, tmp_min_distance, indices);
-                min_distance = std::min(min_distance, tmp_min_distance);
-            }
-            progIO->log_info << "Test for min_distance_between_particles in data: " << min_distance << std::endl;
-            progIO->Output(std::clog, progIO->log_info, __normal_output, __all_processors);
-            
+            MinDistanceBetweenParticles(particle_set, tree, loop_count);
+
             /***** Step III-B, identity high density region and find planetesimals *****/
             tree.FindPlanetesimals();
             

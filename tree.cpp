@@ -1,6 +1,6 @@
 //
 //  tree.cpp
-//  PLAN: PLantesimal ANalyzer
+//  PLAN: PLanetesimal ANalyzer
 //
 //  Created by Rixin Li on 3/11/16.
 //  Copyright © 2016 Rixin Li. All rights reserved.
@@ -58,7 +58,8 @@ const SmallVec<int, 1> Orthant<1>::orthants[1<<1] = {
 /*! \fn template<> void OutBinary<__uint128_t>(std::ostream &stream, __uint128_t x)
  *  \brief make a template specialization for __uint128_t since the initilization of bitset only support 64-bit integer */
 template<>
-void OutBinary<__uint128_t>(std::ostream &stream, __uint128_t x) {
+void OutBinary<__uint128_t>(std::ostream &stream, __uint128_t x)
+{
     OutBinary<__uint64_t>(stream, static_cast<__uint64_t>(x>>64));
     OutBinary<__uint64_t>(stream, static_cast<__uint64_t>(x));
 }
@@ -67,7 +68,8 @@ void OutBinary<__uint128_t>(std::ostream &stream, __uint128_t x) {
 /*! \fn template<> void OutBinary<float>(std::ostream &stream, float x)
  *  \brief make a template specialization for float */
 template<>
-void OutBinary<float>(std::ostream &stream, float x) {
+void OutBinary<float>(std::ostream &stream, float x)
+{
     __uint32_t *bits = reinterpret_cast<__uint32_t *>(&x);
     OutBinary<__uint32_t>(stream, *bits);
 }
@@ -75,7 +77,8 @@ void OutBinary<float>(std::ostream &stream, float x) {
 /*! \fn template<> void OutBinary<double>(std::ostream &stream, double x)
  *  \brief make a template specialization for double */
 template<>
-void OutBinary<double>(std::ostream &stream, double x) {
+void OutBinary<double>(std::ostream &stream, double x)
+{
     __uint64_t *bits = reinterpret_cast<__uint64_t *>(&x);
     OutBinary<__uint64_t>(stream, *bits);
 }
@@ -100,14 +103,16 @@ BaseMortonKey::~BaseMortonKey()
 
 /*! \fn __uint32_t Double2Int(double d)
  *  \brief convert a double on [0, 1) to an unsigned 32 bit integer */
-__uint32_t BaseMortonKey::Double2Int(double d) {
+__uint32_t BaseMortonKey::Double2Int(double d)
+{
     double _t = d * MAXIMUMINTEGER + MAGIC;
     return *(reinterpret_cast<__uint32_t *>(&(_t))); // obtained rightmost 32-bit
 }
 
 /*! \fn void InitializeMortonConstants()
  *  \brief initialize constants used in future calculations */
-void BaseMortonKey::InitializeMortonConstants() {
+void BaseMortonKey::InitializeMortonConstants()
+{
     
     __uint128_t one = 1;
     m1 = (one<<64) + 1; /*!< {0...63...0} 1 {0...63...0} 1 */
