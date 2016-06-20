@@ -63,6 +63,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"Combined", no_argument, &flags.combined_flag, 1},
         {"Find_Clumps", no_argument, &flags.find_clumps_flag, 1},
         {"Basic_Analyses", no_argument, &flags.basic_analyses_flag, 1},
+        {"Density_Vs_Scale", no_argument, &flags.density_vs_scale_flag, 1},
         {"Help", no_argument, &flags.help_flag, 1},
         // These options don't set a flag
         {"num_cpu", required_argument, 0, 'c'},
@@ -149,8 +150,9 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
                     } else {
                         tmp_iss.str(tmp_str.substr(0, pos2));
                         tmp_iss >> start_num >> tmp_char >> end_num;
-                        tmp_iss.str(tmp_str.substr(pos2+1));
-                        tmp_iss >> interval;
+                        std::istringstream tmp_iss_interval;
+                        tmp_iss_interval.str(tmp_str.substr(pos2+1));
+                        tmp_iss_interval >> interval;
                     }
                     if (start_num < 0) {
                         error_message << "The start number should be positive (Auto fix to 0)" << std::endl;
@@ -238,7 +240,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         }
         
         // if no serious flags, set find_clumps_flag to 1
-        if (!flags.find_clumps_flag && !flags.basic_analyses_flag) {
+        if (!flags.find_clumps_flag && !flags.basic_analyses_flag && !flags.density_vs_scale_flag) {
             flags.find_clumps_flag = 1;
         }
         
@@ -275,6 +277,7 @@ void Basic_IO_Operations::PrintUsage(const char *program_name)
     << "Use --Combined to deal with combined lis files (from all processors\n"
     << "Use --Find_Clumps to run clump finding functions\n"
     << "Use --Basic_Analyses to perform basic analyses, which will output max($\\rho_p$) and $H_p$\n"
+    << "Use --Density_Vs_Scale to calculate max($\\rho_p$) as a function of length scale"
     << "If you don't specify any flags, then --Find_Clumps will be turned on automatically.";
     out_content << std::endl;
     Output(std::cout, out_content, __normal_output, __master_only);
@@ -321,7 +324,7 @@ void Basic_IO_Operations::GenerateFilenames()
         file_name.lis_data_file_name.reserve(num_file);
         log_info << "Verifying generated data file names (only the first one and last one):\n";
         
-        for (int num = start_num; num != end_num+1; num += interval) {
+        for (int num = start_num; num != end_num+interval; num += interval) {
             std::stringstream formatted_num;
             formatted_num << std::setw(4) << std::setfill('0') << num;
             
@@ -329,13 +332,16 @@ void Basic_IO_Operations::GenerateFilenames()
             if (num == start_num || num == end_num) {
                 log_info << file_name.lis_data_file_name.back() << "\n";
             }
+            if (num > end_num + interval) {
+                exit(4); // wrong function argument
+            }
         }
         
     } else {
         file_name.lis_data_file_name.reserve(num_file * num_cpu);
         log_info << "Verifying generated data file names (only id0 and id[max]):\n";
         
-        for (int num = start_num; num != end_num+1; num += interval) {
+        for (int num = start_num; num != end_num+interval; num += interval) {
             std::stringstream formatted_num;
             formatted_num << std::setw(4) << std::setfill('0') << num;
             
@@ -345,8 +351,13 @@ void Basic_IO_Operations::GenerateFilenames()
                 file_name.lis_data_file_name.push_back(file_name.data_file_dir+"id"+std::to_string(id)+"/"+file_name.data_file_basename+"-id"+std::to_string(id)+"."+formatted_num.str()+"."+file_name.data_file_postname+".lis");
             }
             log_info << file_name.lis_data_file_name.back() << "\n";
+            if (num > end_num + interval) {
+                exit(4); // wrong function argument
+            }
         }
     }
+    
+    file_name.max_rhop_vs_scale_file = file_name.output_file_path.substr(0, file_name.output_file_path.find_last_of('.'))+"_RMPL.txt";
     
     Output(std::clog, log_info, __even_more_output, __master_only);
     PrintStars(std::clog, __even_more_output);
@@ -390,6 +401,10 @@ void MPI_Wrapper::Initialization(int argc, const char * argv[])
     loop_begin = myrank;
     loop_end = myrank;
     loop_step = num_proc;
+    
+    timer[__waiting_time].StartTimer();
+    timer[__waiting_time].StopTimer();
+    // further waitting time for each processor should use ResumeTimer()
 }
 
 /*! \fn void Determine_Loop(int num_file)
@@ -409,7 +424,9 @@ void MPI_Wrapper::DetermineLoop(int num_file)
 void MPI_Wrapper::Barrier()
 {
 #ifdef MPI_ON
+    timer[__waiting_time].ResumeTimer();
     MPI_Barrier(world);
+    timer[__total_elapse_time].StopTimer();
 #endif // MPI_ON
 }
 
@@ -431,6 +448,10 @@ std::string MPI_Wrapper::RankInfo()
 void MPI_Wrapper::Finalize()
 {
 #ifdef MPI_ON
+    double max_waiting_time = 0, waiting_time = timer[__waiting_time].GiveTime();
+    MPI_Reduce(&waiting_time, &max_waiting_time, 1, MPI_DOUBLE, MPI_MAX, master, world);
+    progIO->log_info << "Max waiting time among all processors due to Barrier(): " << max_waiting_time << "s." << std::endl;
+    progIO->Output(std::clog, progIO->log_info, __normal_output, __master_only);
     MPI_Finalize();
 #endif // MPI_ON
 }
@@ -550,7 +571,7 @@ int Timer::Lap()
 {
     if (timer_on_flag) {
         lap_time.push_back(GetCurrentTime() - begin_time - skip_time);
-        return int(lap_time.size());
+        return (unsigned int)(lap_time.size()-1);
     } else {
         std::cerr << "Error: Timer is off. Cannot lap a time." << std::endl;
         return -1;
@@ -582,7 +603,7 @@ void Timer::ClearTimer()
  *  \brief resume the timer */
 void Timer::ResumeTimer()
 {
-    skip_time += GetCurrentTime() - stop_time;
+    skip_time += GetCurrentTime() - (stop_time+begin_time+skip_time);
     timer_on_flag = 1;
     stop_time = 0;
 }
@@ -595,6 +616,18 @@ double Timer::GiveTime()
         return GetCurrentTime() - begin_time - skip_time;
     } else {
         return stop_time;
+    }
+}
+
+/*! \fn double GiveTime(const unsigned int i)
+ *  \brief give a lap time */
+double Timer::GiveTime(const unsigned int i)
+{
+    if (i < lap_time.size()) {
+        return lap_time[i];
+    } else {
+        std::cerr << "Error: There is not such a lap time record." << std::endl;
+        return -1;
     }
 }
 

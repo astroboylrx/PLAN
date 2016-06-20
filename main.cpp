@@ -53,19 +53,24 @@ int main(int argc, const char * argv[])
     
     /********** Step II: Pre-loop Work **********/
     BasicAnalysesPreWork();
-    const SmallVec<float, dim> box_center(0.0);
+    
     /********** Step III: Loop files, read data and process it **********/
     for (int loop_count = mpi->loop_begin; loop_count <= mpi->loop_end; loop_count += mpi->loop_step) {
         
         /***** Step III-A, read original data and perform basic analyses *****/
         particle_set.ReadLisFile(loop_count);
-        BasicAnalyses(particle_set, loop_count);
+        BasicAnalyses(particle_set, tree, loop_count);
         
-        if (progIO->flags.find_clumps_flag) {
+        if (progIO->flags.find_clumps_flag || progIO->flags.density_vs_scale_flag) {
             particle_set.MakeGhostParticles(progIO->numerical_parameters);
-            tree.BuildTree(progIO->numerical_parameters, particle_set, 1<<dim);
+            tree.BuildTree(progIO->numerical_parameters, particle_set);
+            //tree.max_leaf_size = static_cast<unsigned int>(tree.max_leaf_size*(tree.num_nodes/(particle_set.num_total_particle/15.0)));
+            //progIO->log_info << "Now change tree.max_leaf_size to " << tree.max_leaf_size << std::endl;
+            //progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
+            //tree.BuildTree(progIO->numerical_parameters, particle_set);
+            
             tree.CheckTree(tree.root, tree.root_level, tree.root_center, tree.half_width);
-            MinDistanceBetweenParticles(particle_set, tree, loop_count);
+            BasicAnalysesWithTree(particle_set, tree, loop_count);
 
             /***** Step III-B, identity high density region and find planetesimals *****/
             tree.FindPlanetesimals();
@@ -76,9 +81,9 @@ int main(int argc, const char * argv[])
 
     /********** Step IV: Post-loop Work **********/
     BasicAnalysesPostWork();
-    
     mpi->Barrier();
-    timer[__total_elapse_time].StopTimer();
+    timer[__waiting_time].StopTimer();
+    
     progIO->log_info << "Program ends now. Elapsed time: " << timer[__total_elapse_time].GiveTime() << "\n";
     progIO->PrintStars(std::clog, __normal_output);
     progIO->Output(std::clog, progIO->log_info, __normal_output, __master_only);

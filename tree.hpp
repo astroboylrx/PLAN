@@ -16,6 +16,62 @@
 
 #include "global.hpp"
 
+/******************************/
+/********** Vtk Part **********/
+/******************************/
+
+/*! \class template <int D> VtkData
+ *  \brief contains data from vtk files
+ *  \tparam D dimension of data */
+template <int D>
+class VtkData {
+private:
+    
+public:
+    /*! \var std::string Version
+     *  \brief version of vtk standard */
+    std::string Version;
+    
+    /*! \var std::string header
+     *  \breif file header */
+    std::string header;
+    
+    /*! \var std::string file_format
+     *  \breif file format, ACSII OR BINARY */
+    std::string file_format;
+    
+    /*! \var std::string dataset_structure
+     *  \breif dataset structure, usually STRUCTURED_POINTS
+     *  An example:
+     *  DATASET STRUCTURED_POINTS
+     *  DIMENSIONS n_x n_y n_z
+     *  ORIGIN x y z
+     *  SPACING s_x s_y s_z
+     */
+    std::string dataset_structure;
+    
+    /*! \var double time
+     *  \brief current time in simulation */
+    double time;
+    
+    /*! \var SmallVec<int, D> num_cell
+     *  \brief number of cells in each dimension */
+    SmallVec<int, D> num_cell {SmallVec<int, dim>(64)};
+    
+    /*! \var SmallVec<double, D> origin
+     *  \brief coordinate of origin point */
+    SmallVec<double, D> origin {SmallVec<double, dim>(-0.1)};
+    
+    /*! \var SmallVec<double, D> spacing
+     *  \brief cell spacing, dx/dy/dz... */
+    SmallVec<double, D> spacing {SmallVec<double, dim>(0.003125)};
+    
+    // To be continued
+    
+};
+
+
+
 /***********************************/
 /********** Particle Part **********/
 /***********************************/
@@ -30,15 +86,15 @@ private:
 public:
     /*! \var SmallVec<double, D> r, v
      *  \brief position vector r and velocity vector v */
-    SmallVec<float, D> pos, vec;
+    SmallVec<double, D> pos, vec;
     
     /*! \var int property_index
      *  \brief index of particle properties */
     int property_index;
     
-    /*! \var float density
+    /*! \var double density
      *  \brief local particle density */
-    float density;
+    double density;
     
     /*! \var int id
      *  \brief particle ID in total particle set */
@@ -119,22 +175,22 @@ public:
      *  \brief number of particle types */
     int num_type;
     
-    /*! \var float coor_lim
+    /*! \var double coor_lim
      *  \brief coordinate limits for grid and domain.
      *  It is in the order of grid limits (x1l, x1u, x2l, x2u, x3l, x3u) and domain limits (x1dl, x1du, x2dl, x2du, x3dl, x3du), where l means lower limit, u means upper limit, d means domain */
-    float coor_lim[12];
+    double coor_lim[12];
     
-    /*! \var std::vector<float> type_info
+    /*! \var std::vector<double> type_info
      *  \brief info of different types in lis file */
-    std::vector<float> type_info;
+    std::vector<double> type_info;
     
-    /*! \var float time
+    /*! \var double time
      *  \brief current time in simulation */
-    float time;
+    double time;
     
-    /*! \var float dt
+    /*! \var double dt
      *  \brief current time step */
-    float dt;
+    double dt;
     
     /*! \var Particle<D> particles
      *  \brief particle set */
@@ -185,11 +241,14 @@ public:
     void ReadMultipleLisFile(std::vector<std::string>::iterator begin, std::vector<std::string>::iterator end) {
         std::ifstream lis_file;
         long tmp_num_particle;
-        
+        float tmp_coor_lim[12], tmp_float_value, tmp_float_vector[D];
         // First step, obtain the box limit from RootMin and RootMax and count the total particle numbers
         lis_file.open(begin->c_str(), std::ios::binary);
         if (lis_file.is_open()) {
-            lis_file.read(reinterpret_cast<char*>(coor_lim), 12*sizeof(float));
+            lis_file.read(reinterpret_cast<char*>(tmp_coor_lim), 12*sizeof(float));
+            for (int i = 0; i != 12; i++) {
+                coor_lim[i] = static_cast<double>(tmp_coor_lim[i]);
+            }
             progIO->log_info << *begin << ", x1l = " << coor_lim[0] << ", x1u = " << coor_lim[1]
             << ", x2l = " << coor_lim[2] << ", x2u = " << coor_lim[3]
             << ", x3l = " << coor_lim[4] << ", x3u = " << coor_lim[5]
@@ -201,12 +260,15 @@ public:
             type_info.resize(num_type);
             
             for (int i = 0; i != num_type; i++) {
-                lis_file.read(reinterpret_cast<char*>(&type_info[i]), sizeof(float));
+                lis_file.read(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+                type_info[i] = static_cast<double>(tmp_float_value);
                 progIO->log_info << ": type_info[" << i << "] = " << type_info[i];
             }
             progIO->log_info << "; || ";
-            lis_file.read(reinterpret_cast<char*>(&time), sizeof(float));
-            lis_file.read(reinterpret_cast<char*>(&dt), sizeof(float));
+            lis_file.read(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+            time = static_cast<double>(tmp_float_value);
+            lis_file.read(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+            dt = static_cast<double>(tmp_float_value);
             progIO->log_info << "time = " << time << ", dt = " << dt;
             lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
             num_particle = static_cast<__uint32_t>(tmp_num_particle);
@@ -239,9 +301,10 @@ public:
         // Thrid step, read particle data
         __uint32_t tmp_id = 0;
         Particle<D> *p;
-        size_t triple_float = 3 * sizeof(float);
+        size_t D_float = D * sizeof(float);
         size_t one_float = sizeof(float);
-        size_t one_fil = sizeof(float) + sizeof(int) + sizeof(long);
+        size_t one_int = sizeof(int);
+        size_t one_ili = one_int + sizeof(long) + one_int;
         
         for (std::vector<std::string>::iterator it = begin; it != end; it++) {
             lis_file.open(it->c_str(), std::ios::binary);
@@ -254,14 +317,21 @@ public:
                 const char *tmp_char = tmp_str.data();
                 for (__uint32_t i = 0; i != tmp_num_particle; i++) {
                     p = &particles[tmp_id];
-                    std::memcpy((char*)p->pos.data, tmp_char, triple_float);
-                    std::advance(tmp_char, triple_float);
-                    std::memcpy((char*)p->vec.data, tmp_char, triple_float);
-                    std::advance(tmp_char, triple_float);
-                    std::memcpy((char*)&p->density, tmp_char, one_float);
+                    std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
+                    for (int i = 0; i != D; i++) {
+                        p->pos[i] = static_cast<double>(tmp_float_vector[i]);
+                    }
+                    std::advance(tmp_char, D_float);
+                    std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
+                    for (int i = 0; i != D; i++) {
+                        p->vec[i] = static_cast<double>(tmp_float_vector[i]);
+                    }
+                    std::advance(tmp_char, D_float);
+                    std::memcpy((char*)&tmp_float_value, tmp_char, one_float);
+                    p->density = static_cast<double>(tmp_float_value);
                     std::advance(tmp_char, one_float);
-                    std::memcpy((char*)&p->property_index, tmp_char, one_float);
-                    std::advance(tmp_char, one_fil);
+                    std::memcpy((char*)&p->property_index, tmp_char, one_int);
+                    std::advance(tmp_char, one_ili);
                     p->id = tmp_id++;
                 }
                 lis_file.close();
@@ -283,10 +353,14 @@ public:
     void ReadSingleLisFile(std::vector<std::string>::iterator it) {
         std::ifstream lis_file;
         long tmp_num_particle;
+        float tmp_coor_lim[12], tmp_float_value, tmp_float_vector[D];
         
         lis_file.open(it->c_str(), std::ios::binary);
         if (lis_file.is_open()) {
-            lis_file.read(reinterpret_cast<char*>(coor_lim), 12*sizeof(float));
+            lis_file.read(reinterpret_cast<char*>(tmp_coor_lim), 12*sizeof(float));
+            for (int i = 0; i != 12; i++) {
+                coor_lim[i] = static_cast<double>(tmp_coor_lim[i]);
+            }
             progIO->log_info << *it << ", x1l = " << coor_lim[0] << ", x1u = " << coor_lim[1]
             << ", x2l = " << coor_lim[2] << ", x2u = " << coor_lim[3]
             << ", x3l = " << coor_lim[4] << ", x3u = " << coor_lim[5]
@@ -297,12 +371,15 @@ public:
             progIO->log_info << "num_type = " << num_type;
             type_info.resize(num_type);
             for (int i = 0; i != num_type; i++) {
-                lis_file.read(reinterpret_cast<char*>(&type_info[i]), sizeof(float));
+                lis_file.read(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+                type_info[i] = static_cast<double>(tmp_float_value);
                 progIO->log_info << ": type_info[" << i << "] = " << type_info[i];
             }
             progIO->log_info << "; || ";
-            lis_file.read(reinterpret_cast<char*>(&time), sizeof(float));
-            lis_file.read(reinterpret_cast<char*>(&dt), sizeof(float));
+            lis_file.read(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+            time = static_cast<double>(tmp_float_value);
+            lis_file.read(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+            dt = static_cast<double>(tmp_float_value);
             progIO->log_info << "time = " << time << ", dt = " << dt;
             lis_file.read(reinterpret_cast<char*>(&tmp_num_particle), sizeof(long));
             num_particle = static_cast<__uint32_t>(tmp_num_particle);
@@ -314,10 +391,10 @@ public:
             // Thrid step, read particle data
             __uint32_t tmp_id = 0;
             Particle<D> *p;
-            size_t triple_float = 3 * sizeof(float);
+            size_t D_float = D * sizeof(float);
             size_t one_float = sizeof(float);
             size_t one_int = sizeof(int);
-            size_t one_fil = one_float + one_int + sizeof(long);
+            size_t one_ili = one_int + sizeof(long) + one_int;
             
             std::stringstream content;
             content << lis_file.rdbuf();
@@ -325,14 +402,21 @@ public:
             const char *tmp_char = tmp_str.data();
             for (__uint32_t i = 0; i != tmp_num_particle; i++) {
                 p = &particles[tmp_id];
-                std::memcpy((char*)p->pos.data, tmp_char, triple_float);
-                std::advance(tmp_char, triple_float);
-                std::memcpy((char*)p->vec.data, tmp_char, triple_float);
-                std::advance(tmp_char, triple_float);
-                std::memcpy((char*)&p->density, tmp_char, one_float);
+                std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
+                for (int i = 0; i != D; i++) {
+                    p->pos[i] = static_cast<double>(tmp_float_vector[i]);
+                }
+                std::advance(tmp_char, D_float);
+                std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
+                for (int i = 0; i != D; i++) {
+                    p->vec[i] = static_cast<double>(tmp_float_vector[i]);
+                }
+                std::advance(tmp_char, D_float);
+                std::memcpy((char*)&tmp_float_value, tmp_char, one_float);
+                p->density = static_cast<double>(tmp_float_value);
                 std::advance(tmp_char, one_float);
                 std::memcpy((char*)&p->property_index, tmp_char, one_int);
-                std::advance(tmp_char, one_fil);
+                std::advance(tmp_char, one_ili);
                 p->id = tmp_id++;
             }
             lis_file.close();
@@ -365,6 +449,8 @@ public:
         
         progIO->physical_quantities[loop_count].time = time;
         progIO->physical_quantities[loop_count].dt = dt;
+        progIO->physical_quantities[loop_count].mass_per_particle.resize(num_type);
+        
         
         progIO->numerical_parameters.box_min = SmallVec<double, D>(coor_lim[6], coor_lim[8], coor_lim[10]);
         progIO->numerical_parameters.box_max = SmallVec<double, D>(coor_lim[7], coor_lim[9], coor_lim[11]);
@@ -377,12 +463,22 @@ public:
      *  \brief make ghost particles for ghost zone based on ghost zone size
      *  Note this function assumes we are dealing with 3D data. We can implement more if there are other situations. */
     void MakeGhostParticles(const NumericalParameters &paras) {
+        if (progIO->flags.no_ghost_particle_flag) {
+            return;
+        }
+        
         Particle<D> *ghost_particles = new Particle<D>[3*num_particle]; // The worst case is that one particle has three ghost partners, under the assumption that we don't use periodic boudary conditions for the vertical direction.
         __uint32_t tmp_id = num_particle, ghost_id = 0;
         
-        fvec non_ghost_width = paras.box_half_width - fvec(paras.ghost_zone_width);
-        fvec non_ghost_min = paras.box_center - non_ghost_width;
-        fvec non_ghost_max = paras.box_center + non_ghost_width;
+        dvec non_ghost_width = paras.box_half_width - dvec(paras.ghost_zone_width);
+        for (int i = 0; i != D; i++) {
+            if (non_ghost_width[i] < 0) {
+                non_ghost_width[i] = 0;
+            }
+        }
+        
+        dvec non_ghost_min = paras.box_center - non_ghost_width;
+        dvec non_ghost_max = paras.box_center + non_ghost_width;
         
         // Firstly, we make ghost particles for radial direction which need shear mapping
         for (__uint32_t i = 0; i != num_particle; i++) {
@@ -390,7 +486,7 @@ public:
                 ghost_particles[ghost_id] = particles[i];
                 ghost_particles[ghost_id].id = tmp_id++;
                 ghost_particles[ghost_id].pos[0] += paras.box_length[0];
-                float new_y = ghost_particles[ghost_id].pos[1] + paras.shear_speed * time;
+                double new_y = ghost_particles[ghost_id].pos[1] + paras.shear_speed * time;
                 // new_y = new_y [- ymin] - int( (new_y - ymin) / L_Y ) * L_Y [+ ymin]
                 ghost_particles[ghost_id].pos[1] = new_y - static_cast<int>((new_y - paras.box_min[1]) / paras.box_length[1]) * paras.box_length[1];
                 ghost_id++;
@@ -399,7 +495,7 @@ public:
                 ghost_particles[ghost_id] = particles[i];
                 ghost_particles[ghost_id].id = tmp_id++;
                 ghost_particles[ghost_id].pos[0] -= paras.box_length[0];
-                float new_y = ghost_particles[ghost_id].pos[1] - paras.shear_speed * time;
+                double new_y = ghost_particles[ghost_id].pos[1] - paras.shear_speed * time;
                 // new_y = [ymax -] ( ([ymax -] new_y) + int( (ymax - new_y) / L_Y ) * L_Y )
                 ghost_particles[ghost_id].pos[1] = new_y + static_cast<int>((paras.box_max[1] - new_y) / paras.box_length[1]) * paras.box_length[1];
                 ghost_id++;
@@ -454,7 +550,7 @@ public:
         std::memcpy(particles+num_particle, ghost_particles, sizeof(Particle<D>)*num_ghost_particle);
         
         /* this is a small check for ghost particles
-        fvec box_limit = paras.box_max + fvec(paras.ghost_zone_width);
+        dvec box_limit = paras.box_max + dvec(paras.ghost_zone_width);
         for (__uint32_t i = num_ghost_particle; i != num_total_particle; i++) {
             assert (particles[i].pos <= box_limit);
         }
@@ -649,10 +745,10 @@ public:
         }
     }
     
-    /*! \fn template <class U> Morton(SmallVec<U, D> pos, int index)
+    /*! \fn template <class U> Morton(SmallVec<U, D> &pos, int index)
      *  \brief convert a position vector pos and particle index into a 128-bit Morton Key */
     template <class U>
-    morton_key Morton(SmallVec<U, D> pos, int index) {
+    morton_key Morton(SmallVec<U, D> &pos, int index) {
         dvec pos_scaled = pos - boxmin;
         for (int d = 0; d != D; d++) {
             pos_scaled[d] *= scale[d];
@@ -665,9 +761,9 @@ public:
         return Morton(int_pos, index);
     }
     
-    /*! \fn Morton(SmallVec<__uint32_t, D> pos, int index)
+    /*! \fn Morton(SmallVec<__uint32_t, D> &pos, int index)
      *  \brief overloading Morton above for __uint32_t */
-    morton_key Morton(SmallVec<__uint32_t, D> pos, int index) {
+    morton_key Morton(SmallVec<__uint32_t, D> &pos, int index) {
         morton_key result = (static_cast<__uint128_t>(index))<<96;
         for (int d = 0; d != D; d++) {
             result |= (Dilate3_Int32(pos[d])<<d);
@@ -788,7 +884,7 @@ public:
     
     /*! \var int max_leaf_size
      *  \brief max number of  */
-    int max_leaf_size;
+    int max_leaf_size {1<<D};
     
     /*! \var int max_daughters
      *  \brief max number of daughters 2^D */
@@ -815,11 +911,12 @@ public:
     double half_width;
     
     /*! \var int level_count[max_level]
-     *  \brief TBD */
+     *  \brief count how many nodes in each level */
     int level_count[max_level];
     
     /*! \var int level_ptr[max_level]
-     *  \brief TBD */
+     *  \brief used for building tree, point to currently empty node at each level
+     *  The number of nodes in each level has been fixed after CountNodesLeaves() but before FillTree() */
     int level_ptr[max_level];
     
     /*! \var std::vector<std::pair<int, double>> heaps;
@@ -899,10 +996,11 @@ public:
             }
             assert(count > 0); // this is weird ???
             
+            //if (__level >= max_level) std::cerr << "Hit max_level" << std::endl;
             level_count[__level]++;
             num_nodes++;
             
-            if (count <= max_leaf_size) {
+            if (count <= max_leaf_size || __level == max_level - 1) { // prevent using further levels
                 num_leaf_nodes++; // only nodes with leaves < max_leaf_size are leaves
             } else {
                 CountNodesLeaves(__level+1, __begin-count, __begin);
@@ -914,9 +1012,9 @@ public:
         }
     }
     
-    /*! \fn void FillTree(const int level, int __begin, const int __end, const int parent, const dvec center, const double __half_width)
+    /*! \fn void FillTree(const int level, int __begin, const int __end, const int parent, const dvec &__center, const double __half_width)
      *  \brief fill the tree with data */
-    void FillTree(const int __level, int __begin, const int __end, const int __parent, const dvec __center, const double __half_width) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
+    void FillTree(const int __level, int __begin, const int __end, const int __parent, const dvec &__center, const double __half_width) { // double underscore here is to avoid confusion with TreeNode member or InternalParticle member
         assert(__level < max_level);
         assert(__end > __begin); // note if this will cause bug
         assert(tree[__parent].first_daughter == 0);
@@ -938,7 +1036,7 @@ public:
             }
             assert(count > 0);
             
-            // get daughter node number in tree
+            // get daughter node number from currently-empty node budget in tree
             int daughter = level_ptr[__level];
             level_ptr[__level]++;
             
@@ -968,7 +1066,7 @@ public:
             node_ptr++;
             assert(node_ptr < num_nodes);
             
-            if (count <= max_leaf_size) {
+            if (count <= max_leaf_size || __level == max_level - 1) { // prevent using further levels
                 // node with <= max_leaf_size particles is a leaf
                 leaf_nodes[num_leaf_nodes] = daughter;
                 node2leaf[daughter] = num_leaf_nodes;
@@ -985,13 +1083,12 @@ public:
         }
     }
     
-    /*! \fn void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set, const int __max_leaf_size)
+    /*! \fn void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set)
      *  \brief build tree from particle data */
-    void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set, const int __max_leaf_size) { // double underscore here is to avoid confusion with all sorts of members
+    void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set) { // double underscore here is to avoid confusion with all sorts of members
         Reset();
         half_width = paras.max_half_width + paras.ghost_zone_width;
         root_center = paras.box_center;
-        max_leaf_size = __max_leaf_size;
         
         assert(particle_set.num_total_particle < (__uint32_t)0xffffffff);
         num_particle = particle_set.num_total_particle;
@@ -1011,9 +1108,11 @@ public:
             morton[i] = this->Morton(particle_list[i].pos, i);
         }
         std::sort(&(morton[0]), &(morton[num_particle]), AscendingMorton());
-        for (__uint32_t i = 0; i != num_particle-1; i++) {
-            assert((morton[i]<<32) < (morton[i+1]<<32));
-        }
+        
+        // RL: I already found particles that are too close in my data. But we can tolerate it for now since max_leaf_size > 1
+        //for (__uint32_t i = 0; i != num_particle-1; i++) {
+        //    assert((morton[i]<<32) < (morton[i+1]<<32));
+        //}
         SortPoints();
         
         num_leaf_nodes = 0;
@@ -1025,7 +1124,6 @@ public:
         // run through the data once to determine space required for tree
         num_nodes = 1; // root contribute one
         CountNodesLeaves(root_level, 0, num_particle);
-        
         assert(num_nodes == std::accumulate(level_count, level_count+max_level, 0));
         
         // allocate space for tree, leaf_nodes, and node2leaf index mapping
@@ -1058,12 +1156,15 @@ public:
         assert(node_ptr + 1 == num_nodes);
         delete [] morton;
         morton = nullptr;
+        
+        progIO->log_info << "Finish building a tree: num_nodes = " << num_nodes << std::endl;
+        progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
     }
     
-    /*! \fn bool Within(const dvec __pos, const dvec node_center, const double __half_width)
+    /*! \fn bool Within(const dvec &__pos, const dvec &node_center, const double __half_width)
      *  \brief determine if a particle is within certain distance of a node center */
-    bool Within(const dvec __pos, const dvec node_center, const double __half_width) {
-        double epsilon = 1.0e-8;
+    bool Within(const dvec &__pos, const dvec &node_center, const double __half_width) {
+        double epsilon = 1.0e-9;
         for (int d = 0; d != D; d++) {
             if ( !(__pos[d] >= node_center[d] - __half_width - epsilon && __pos[d] <= node_center[d] + __half_width + epsilon)) {
                 return false;
@@ -1072,15 +1173,15 @@ public:
         return true;
     }
     
-    /*! \fn void CheckTree(const int node, const int __level, const dvec node_center, const double __half_width)
+    /*! \fn void CheckTree(const int node, const int __level, const dvec &node_center, const double __half_width)
      *  \brief traverse the tree and check whether each point is within the node it is supposed to be. Also check levels/widths/centers */
-    void CheckTree(const int node, const int __level, const dvec node_center, const double __half_width) {
+    void CheckTree(const int node, const int __level, const dvec &node_center, const double __half_width) {
         assert(tree[node].level == __level);
         assert(tree[node].half_width == __half_width);
         
         for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
             if (!Within(particle_list[p].pos, node_center, __half_width)) {
-                progIO->error_message << "Particle " << particle_list[p].pos << " outside node " << node_center << " with width " << 2*tree[node].half_width;
+                progIO->error_message << "Particle " << particle_list[p].pos << " outside node " << node_center << " with width " << 2*tree[node].half_width << std::endl;
                 progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
             }
         }
@@ -1110,9 +1211,9 @@ public:
         return tree[node].end - tree[node].begin; // note the end is off-the-end iterator
     }
     
-    /*! \fn inline bool InNode(const dvec __pos, const int node)
+    /*! \fn inline bool InNode(const dvec &__pos, const int node)
      *  \brief determine if a particle is in a node */
-    inline bool InNode(const dvec __pos, const int node) {
+    inline bool InNode(const dvec &__pos, const int node) {
         return Within(__pos, tree[node].center, tree[node].half_width);
     }
     
@@ -1140,17 +1241,35 @@ public:
         return daughter;
     }
     
-    /*! \fn __uint32_t Pos2Node(const dvec __pos)
+    /*! \fn __uint32_t Pos2Node(const dvec &__pos)
      *  \brief given position, find the index of node containing it */
-    __uint32_t Pos2Node(const dvec __pos) {
+    __uint32_t Pos2Node(const dvec &__pos) {
         assert( Within(__pos, root_center, half_width));
         typename MortonKey<D>::morton_key __morton = this->Morton(__pos, 0); // index doesn't matter here, just give 0
         return Key2Leaf(__morton, root, root_level);
     }
     
-    /*! \fn bool SphereNodeIntersect(const dvec __center, const double r, const int node)
+    /*! \fn bool SphereContainNode(const dvec &__center, const double r, const int node)
+     *  \brief return true if the entire node is within the sphere (__center, r) */
+    bool SphereContainNode(const dvec &__center, const double r, const int node) {
+        assert(node < num_nodes);
+        SmallVec<double, D> max_distance = (tree[node].center - __center);
+        double tmp_distance = tree[node].half_width * to_diagonal; // assume node is a cube
+        
+        for (int i = 0; i != D; i++) {
+            max_distance[i] = std::fabs(max_distance[i]) + tmp_distance;
+        }
+        
+        if (max_distance.Norm2() < r * r) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
+    /*! \fn bool SphereNodeIntersect(const dvec &__center, const double r, const int node)
      *  \brief return true if any part of node is within the sphere (__center, r) */
-    bool SphereNodeIntersect(const dvec __center, const double r, const int node) {
+    bool SphereNodeIntersect(const dvec &__center, const double r, const int node) {
         assert(node < num_nodes);
         double c2c = (tree[node].center - __center).Norm2();
         double tmp_distance = tree[node].half_width * to_diagonal + r;
@@ -1160,7 +1279,7 @@ public:
             return false;
         }
         
-        // check if node center is inside the sphere
+        // check if node center is inside the sphere or the spheric center is inside the node
         if (c2c < r || c2c < tree[node].half_width) {
             return true;
         }
@@ -1215,10 +1334,14 @@ public:
         std::vector<std::pair<int, double>>().swap(heaps);
     }
     
-    /*! \fn void RecursiveKNN(const dvec __pos, const int node, const double dist, const int knn)
+    /*! \fn void RecursiveKNN(const dvec &__pos, const int node, const double dist, const int knn)
      *  \brief do recursive KNN search to traverse the tree */
-    void RecursiveKNN(const dvec __pos, const int node, const double dist, const int knn) {
-        if (SphereNodeIntersect(__pos, dist, node)) {
+    void RecursiveKNN(const dvec &__pos, const int node, const double dist, const int knn) {
+        if (SphereContainNode(__pos, dist, node)) {
+            for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
+                Add2Heaps(knn, p, (__pos-particle_list[p].pos).Norm2());
+            }
+        } else if (SphereNodeIntersect(__pos, dist, node)) {
             if (IsLeaf(node)) {
                 for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
                     Add2Heaps(knn, p, (__pos-particle_list[p].pos).Norm2());
@@ -1231,9 +1354,9 @@ public:
         }
     }
     
-    /*! \fn void KNN_Search(const dvec __pos, const unsigned int knn, double &radius_knn, int *indices)
+    /*! \fn void KNN_Search(const dvec &__pos, const unsigned int knn, double &radius_knn, int *indices)
      *  \brief given position, perform k-nearest neighbours search and return radius and particle indices */
-    void KNN_Search(const dvec __pos, const unsigned int knn, double &radius_knn, int *indices) {
+    void KNN_Search(const dvec &__pos, const unsigned int knn, double &radius_knn, int *indices) {
         assert(knn <= num_particle);
         
         if (heaps.size() != 0) {
@@ -1278,38 +1401,160 @@ public:
         radius_knn = sqrt(heaps.front().second);
     }
     
-    /*! \fn void RecursiveBallSearch(const dvec __pos, int node, const double radius, int *indices, int &count)
-     *  \brief do recursive ball search to traverse the tree */
-    void RecursiveBallSearch(const dvec __pos, int node, const double radius, int *indices, int &count) {
-        if (SphereNodeIntersect(__pos, radius, node)) {
+    /*! \fn void RecursiveBallSearchCount(const dvec __pos, int node, const double radius, __uint32_t &count)
+     *  \brief do recursive ball search (only count numbers) to traverse the tree */
+    void RecursiveBallSearchCount(const dvec &__pos, int node, const double radius, __uint32_t &count) {
+        if (SphereContainNode(__pos, radius, node)) {
+            count += (tree[node].end - tree[node].begin);
+        } else if (SphereNodeIntersect(__pos, radius, node)) {
             if (IsLeaf(node)) {
-                for (int p = tree[node].begin; p != tree[node].end; p++) {
+                for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
+                    if ((__pos - particle_list[p].pos).Norm2() <= radius * radius) {
+                        count++;
+                    }
+                }
+            } else {
+                for (__uint32_t d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+                    RecursiveBallSearchCount(__pos, d, radius, count);
+                }
+            }
+        }
+    }
+    
+    /*! \fn void RecursiveBallSearch(const dvec &__pos, int node, const double radius, __uint32_t *indices, __uint32_t &count)
+     *  \brief do recursive ball search to traverse the tree */
+    void RecursiveBallSearch(const dvec &__pos, int node, const double radius, __uint32_t *indices, __uint32_t &count) {
+        if (SphereContainNode(__pos, radius, node)) {
+            for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
+                indices[count++] = p;
+            }
+        } else if (SphereNodeIntersect(__pos, radius, node)) {
+            if (IsLeaf(node)) {
+                for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
                     if ((__pos - particle_list[p].pos).Norm2() <= radius * radius) {
                         indices[count++] = p;
                     }
                 }
             } else {
-                for (int d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+                for (__uint32_t d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
                     RecursiveBallSearch(__pos, d, radius, indices, count);
                 }
             }
         }
     }
     
-    /*! \fn void BallSearch(const dvec __center, const double radius, int *indices, int &count)
+    /*! \fn void BallSearch(const dvec &__center, const double radius, __uint32_t *indices, __uint32_t &count)
      *  \brief perform a search within a sphere */
-    void BallSearch (const dvec __center, const double radius, int *indices, int &count) {
+    void BallSearch (const dvec &__center, const double radius, __uint32_t *indices, __uint32_t &count) {
         count = 0;
         RecursiveBallSearch(__center, root, radius, indices, count);
-        // convert morton key to original particle id
+        // convert morton key to original particle id (optional step, only useful while interacting with outsiders)
         for (int i = 0; i < count; i++) {
             indices[i] = particle_list[indices[i]].id;
         }
     }
     
+    
+    /*! \fn dvec ShearedCenter2Center(const dvec &__center, const int node, dvec &max_distance, double shear_distance)
+     *  \brief return the distance between spherical center and sheared node center */
+    dvec ShearedCenter2Center(const dvec &__center, const int node, dvec &max_distance, double shear_distance) {
+        assert(node < num_nodes);
+        dvec tmp_node_center = tree[node].center;
+        dvec c2c;
+        for (int i = 0; i != D; i++) {
+            c2c[i] = __center[i] - tmp_node_center[i];
+            if (std::fabs(c2c[i]) > max_distance[i]) {
+                if (c2c[i] > 0) {
+                    c2c[i] -= progIO->numerical_parameters.box_length[i];
+                } else {
+                    c2c[i] += progIO->numerical_parameters.box_length[i];
+                }
+                if (i == 0 && D > 1) {
+                    if (__center[0] < 0) { // RL: assume the center of simulation is dvec(0)
+                        tmp_node_center[1] -= shear_distance;
+                        tmp_node_center[1] += static_cast<int>((progIO->numerical_parameters.box_max[1]-tmp_node_center[1]) / progIO->numerical_parameters.box_length[1]) * progIO->numerical_parameters.box_length[1];
+                    } else {
+                        tmp_node_center[1] += shear_distance;
+                        tmp_node_center[1] -= static_cast<int>((tmp_node_center[1]-progIO->numerical_parameters.box_min[1]) / progIO->numerical_parameters.box_length[1]) * progIO->numerical_parameters.box_length[1];
+                    }
+                }
+            }
+        }
+        return c2c;
+    }
+    
+    /*! \fn bool SphereContainNodeWithShear(const dvec &__center, const double r, const int node, const dvec &c2c)
+     *  \brief return true if the entire node is within the sphere (__center, r) */
+    bool SphereContainNodeWithShear(const dvec &__center, const double r, const int node, const dvec &c2c) {
+        double tmp_distance = tree[node].half_width * to_diagonal; // assume node is a cube
+        dvec tmp_dvec;
+        for (int i = 0; i != D; i++) {
+            tmp_dvec[i] = std::fabs(c2c[i])+tmp_distance;
+        }
+        if (tmp_dvec.Norm2() < r * r) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
+    /*! \fn bool SphereNodeIntersectWithShear(const dvec __center, const double r, const int node, const dvec &c2c)
+     *  \brief return true if any part of node is within the sphere (__center, r) */
+    bool SphereNodeIntersectWithShear(const dvec __center, const double r, const int node, const dvec &c2c) {
+        double c2c_distance = c2c.Norm2();
+        double tmp_distance = tree[node].half_width * to_diagonal + r;
+        
+        // check if node is outside the sphere
+        if (c2c_distance > tmp_distance * tmp_distance) {
+            return false;
+        }
+        
+        // check if node center is inside the sphere
+        if (c2c_distance < r || c2c_distance < tree[node].half_width) {
+            return true;
+        }
+        
+        // now do exact check for intersection
+        // notice that when we extend each side, the space is divided into multiple sub-space, and the value for each sub-space is different
+        dvec pos_min = __center - c2c - dvec(tree[node].half_width);
+        dvec pos_max = __center - c2c + dvec(tree[node].half_width);
+        
+        double mindist2 = 0;
+        for (int d = 0; d != D; d++) {
+            if (__center[d] < pos_min[d]) {
+                mindist2 += (__center[d] - pos_min[d]) * (__center[d] - pos_min[d]);
+            } else if (__center[d] > pos_max[d]) {
+                mindist2 += (__center[d] - pos_max[d]) * (__center[d] - pos_max[d]);
+            }
+        }
+        
+        return mindist2 <= r*r;
+    }
+    
+    /*! \fn void RecursiveBallSearchCountWithShear(const dvec __pos, int node, const double radius, __uint32_t &count, dvec &max_distance, double shear_distance)
+     *  \brief do recursive ball search (only count numbers) to traverse the tree */
+    void RecursiveBallSearchCountWithShear(const dvec __pos, int node, const double radius, __uint32_t &count, dvec &max_distance, double shear_distance) {
+        dvec c2c = ShearedCenter2Center(__pos, node, max_distance, shear_distance);
+        if (SphereContainNodeWithShear(__pos, radius, node, c2c)) {
+            count += (tree[node].end - tree[node].begin);
+        } else if (SphereNodeIntersectWithShear(__pos, radius, node, c2c)) {
+            if (IsLeaf(node)) {
+                for (__uint32_t p = tree[node].begin; p != tree[node].end; p++) {
+                    if ((__pos - particle_list[p].pos).Norm2() <= radius * radius) {
+                        count++;
+                    }
+                }
+            } else {
+                for (__uint32_t d = tree[node].first_daughter; d != tree[node].first_daughter + tree[node].num_daughter; d++) {
+                    RecursiveBallSearchCountWithShear(__pos, d, radius, count, max_distance, shear_distance);
+                }
+            }
+        }
+    }
+    
     /*! \fn void FindPlanetesimals()
      *  \brief find planetesimals in particle data
-     *  For planetesimals, whether that sub-overdensity regions heavily reside inside larger overdensity regions remains unclear. For simplicity, we will only use spatial information to idensity planetesimals at first.  */
+     *  For simplicity, we only use spatial information to idensity planetesimals at first. */
     void FindPlanetesimals() {
         // Get high density regions by sorting dpar
         

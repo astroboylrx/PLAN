@@ -31,6 +31,7 @@
 #include <numeric>
 #include <array>
 #include <type_traits>
+#include <map>
 // Include other libraries
 #include <unistd.h>
 #include <getopt.h>
@@ -44,6 +45,9 @@
 #if __cplusplus <= 199711L
 #error This program wants a C++11 compliant compiler (option -DOLDCPP which supports old compilers has been abandoned).
 #endif // __cplusplus
+
+// Disable assert() for the production version (we may want to merge Debug flag with this)
+#define NDEBUG
 
 /***********************************/
 /********** SmallVec Part **********/
@@ -321,6 +325,17 @@ public:
         return tmp;
     }
     
+    /*! \fn template <class U> inline SmallVec<typename PromoteNumeric<T, U>::type, 3> ParaMultiply(const SmallVec<U, 3>& rhs) const
+     *  \brief give a new SmallVec, where data[i] = this[i] * rhs[i] */
+    template <class U>
+    inline SmallVec<typename PromoteNumeric<T, U>::type, 3> ParaMultiply(const SmallVec<U, 3>& rhs) const {
+        SmallVec<typename PromoteNumeric<T, U>::type, 3> tmp;
+        tmp[0] = data[0] * rhs[0];
+        tmp[1] = data[1] * rhs[1];
+        tmp[2] = data[2] * rhs[2];
+        return tmp;
+    }
+    
     /*! \fn template <class U, class V> bool AbsClose(const SmallVec<U, D>& rhs, const V epsilon) const
      *  \brief determine if the absolute difference between this_vector and rhs is less than epsilon in each element */
     template <class U, class V>
@@ -329,7 +344,7 @@ public:
         diff = *this - rhs;
         bool val = true;
         for (int i = 0; i != D; i++) {
-            val = val && fabs(diff[i] < epsilon);
+            val = val && std::fabs(diff[i] < epsilon);
         }
         return val;
     }
@@ -340,12 +355,12 @@ public:
     int RelClose(const SmallVec<U, D>& rhs, const V epsilon) const {
         SmallVec<typename PromoteNumeric<T, U>::type, D> sum, diff;
         for (int i = 0; i != D; i++) {
-            sum[i] = fabs(data[i]) + fabs(rhs[i]);
+            sum[i] = std::fabs(data[i]) + std::fabs(rhs[i]);
         }
         diff = *this - rhs;
         bool val = true;
         for (int i = 0; i != D; i++) {
-            val = val && ((2 * fabs(diff[i]) / sum[i]) < epsilon);
+            val = val && ((2 * std::fabs(diff[i]) / sum[i]) < epsilon);
         } // if sum[i] = 0, we will get nan
         return val;
     }
@@ -565,12 +580,16 @@ public:
      *  \brief half the default box side length */
     SmallVec<double, dim> box_half_width {SmallVec<double, dim>(0.1)};
     
+    /*! \var SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.003125)}
+     *  \brief the default cell side length */
+    SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.003125)};
+    
     /*! \var double max_half_width
      *  \brief maximum half width of box
      *  This is trick for building tree for non-cubic box. But later we can implement tree that use exact half width */
     double max_half_width {0.1};
     
-    /*! \var double ghost_zone_ratio = 0.025
+    /*! \var double ghost_zone_width {0.025}
      *  \brief width of the ghost zone
      *  Since planetesimal's size usually < 0.025H, so we adopt this figure. */
     double ghost_zone_width {0.025};
@@ -628,6 +647,10 @@ public:
      *  \brief output file for basic_analyses result */
     std::string output_file_path;
     
+    /*! \var std::string max_rhop_vs_scale_file_path
+     *  \brief output file for max_rhop at all scales */
+    std::string max_rhop_vs_scale_file;
+    
     /*! \var std::string input_const_path
      *  \brief input file for constant data */
     std::string input_const_path;
@@ -652,13 +675,21 @@ public:
  *  \brief all physical quantities that might needed to be calculated */
 class PhysicalQuantities {
 public:
-    /*! \var float time;
+    /*! \var double time;
      *  \brief simulation time */
-    float time;
+    double time;
     
-    /*! \var float dt;
+    /*! \var double dt;
      *  \brief simulation time step */
-    float dt;
+    double dt;
+    
+    /*! \var double solid_to_gas_ratio
+     *  \brief solid-to-gas ratio, usually 0.02 */
+    double solid_to_gas_ratio {0.02};
+    
+    /*! \var std::vector<double> mass_per_particle
+     *  \brief mass of one particle for each type */
+    std::vector<double> mass_per_particle {std::vector<double>(03.82481121006927567e-9, 1)};
     
     /*! \var std::vector<double> particle_scale_height;
      *  \brief particle scale height for all particle sizes */
@@ -666,7 +697,11 @@ public:
     
     /*! \var double max_particle_density
      *  \brief maximum particle density: $\rho_p$ */
-    float max_particle_density {0.0};
+    double max_particle_density {0.0};
+    
+    /*! \var std::vector<double> max_rhop_vs_scale
+     *  \brief maximum sphere-based particle density at all length scales */
+    std::vector<double> max_rhop_vs_scale;
 };
 
 /*! \enum OutputLevel
@@ -709,6 +744,14 @@ public:
     /*! \var int basic_analyses_flag
      *  \brief set this flag to perform basic data analysis */
     int basic_analyses_flag {0};
+    
+    /*! \var int density_vs_scale_flag
+     *  \brief set this flag to calculate max(rho_p) at all scales */
+    int density_vs_scale_flag {0};
+    
+    /*! \var int no_ghost_particle_flag
+     *  \brief set this flag to prevent making ghost particles */
+    int no_ghost_particle_flag {0};
     
     /*! \var int help_flag
      *  \brief set this flag to print out usage information */
@@ -866,9 +909,17 @@ public:
     
 #endif // MPI_ON
     
-    /*! \var file_obj result_file
-     *  \brief default file to output result */
-    file_obj result_file;
+    /*! \var std::vector<file_obj> result_files
+     *  \brief files to output results */
+    std::vector<file_obj> result_files;
+    
+    /*! \var std::map<std::string, std::vector<file_obj>::iterator> files
+     *  \brief mapping file names into result_files vector */
+    std::map<std::string, std::vector<file_obj>::iterator> files;
+    
+    /*! \var file_obj max_rhop_vs_scale_file
+     *  \brief default file to output max_rhop at all scales */
+    file_obj max_rhop_vs_scale_file;
     
     /*! \fn MPI_Wrapper()
      *  \brief constructor */
@@ -977,6 +1028,10 @@ public:
     /*! \fn double GiveTime()
      *  \brief give the time (on) or [start->stop] (off) */
     double GiveTime();
+    
+    /*! \fn double GiveTime(const unsigned int i)
+     *  \brief overload: give the lap time */
+    double GiveTime(const unsigned int i);
     
     /*! \fn ~Timer()
      *  \brief destructor */
