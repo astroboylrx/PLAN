@@ -55,13 +55,13 @@ const SmallVec<int, 1> Orthant<1>::orthants[1<<1] = {
 /***** template specialization for OutBinary *****/
 /*************************************************/
 
-/*! \fn template<> void OutBinary<__uint128_t>(std::ostream &stream, __uint128_t x)
- *  \brief make a template specialization for __uint128_t since the initilization of bitset only support 64-bit integer */
+/*! \fn template<> void OutBinary<BaseMortonKey::uint128_t>(std::ostream &stream, BaseMortonKey::uint128_t x)
+ *  \brief make a template specialization for uint128_t since the initilization of bitset only support 64-bit integer */
 template<>
-void OutBinary<__uint128_t>(std::ostream &stream, __uint128_t x)
+void OutBinary<BaseMortonKey::uint128_t>(std::ostream &stream, BaseMortonKey::uint128_t x)
 {
-    OutBinary<__uint64_t>(stream, static_cast<__uint64_t>(x>>64));
-    OutBinary<__uint64_t>(stream, static_cast<__uint64_t>(x));
+    OutBinary<uint64_t>(stream, static_cast<uint64_t>(x>>64));
+    OutBinary<uint64_t>(stream, static_cast<uint64_t>(x));
 }
 
 
@@ -70,8 +70,8 @@ void OutBinary<__uint128_t>(std::ostream &stream, __uint128_t x)
 template<>
 void OutBinary<float>(std::ostream &stream, float x)
 {
-    __uint32_t *bits = reinterpret_cast<__uint32_t *>(&x);
-    OutBinary<__uint32_t>(stream, *bits);
+    uint32_t *bits = reinterpret_cast<uint32_t *>(&x);
+    OutBinary<uint32_t>(stream, *bits);
 }
 
 /*! \fn template<> void OutBinary<double>(std::ostream &stream, double x)
@@ -79,8 +79,8 @@ void OutBinary<float>(std::ostream &stream, float x)
 template<>
 void OutBinary<double>(std::ostream &stream, double x)
 {
-    __uint64_t *bits = reinterpret_cast<__uint64_t *>(&x);
-    OutBinary<__uint64_t>(stream, *bits);
+    uint64_t *bits = reinterpret_cast<uint64_t *>(&x);
+    OutBinary<uint64_t>(stream, *bits);
 }
 
 /*************************/
@@ -101,12 +101,15 @@ BaseMortonKey::~BaseMortonKey()
     ;
 }
 
-/*! \fn __uint32_t Double2Int(double d)
+/*! \fn uint32_t Double2Int(double d)
  *  \brief convert a double on [0, 1) to an unsigned 32 bit integer */
-__uint32_t BaseMortonKey::Double2Int(double d)
+uint32_t BaseMortonKey::Double2Int(double d)
 {
-    double _t = d * MAXIMUMINTEGER + MAGIC;
-    return *(reinterpret_cast<__uint32_t *>(&(_t))); // obtained rightmost 32-bit
+    static_assert(sizeof(double) == sizeof(uint64_t), "TypeError: sizeof(double) != 8\n");
+    double tmp_double = d * MAXIMUMINTEGER + MAGIC;
+    uint64_t tmp_int;
+    std::memcpy(&tmp_int, &tmp_double, sizeof(double));
+    return static_cast<uint32_t>(tmp_int); // obtained rightmost 32-bit without breaking strict-aliasing rules
 }
 
 /*! \fn void InitializeMortonConstants()
@@ -114,11 +117,11 @@ __uint32_t BaseMortonKey::Double2Int(double d)
 void BaseMortonKey::InitializeMortonConstants()
 {
     
-    __uint128_t one = 1;
+    uint128_t one = 1;
     m1 = (one<<64) + 1; /*!< {0...63...0} 1 {0...63...0} 1 */
     m2 = (one<<64) + (one<<32) + 1; // {0...63...0} 1 {0...31...0} 1 {0...31...0} 1
     
-    __uint128_t x;
+    uint128_t x;
     
     x = 0xffffffffUL; // {0...96...0}{1...32...1}
     c1 = (x<<96)+x; // {1...32...1}{0...64...0}{1...32...1}

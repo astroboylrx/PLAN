@@ -13,28 +13,38 @@
 #define global_hpp
 
 // Include C libraries first
-#include <cstdio>
-#include <cstring>
-#include <cstdlib>
-#include <cmath>
-#include <ctime>
 #include <cassert>
-#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 // Include C++ libraries
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <string>
-#include <bitset>
-#include <iomanip>
-#include <numeric>
+#include <algorithm>
 #include <array>
+#include <bitset>
+#include <chrono> // todo: use this instead of ctime in Timer class
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <numeric>
+#include <limits>
+#include <sstream>
+#include <string>
 #include <type_traits>
+#include <vector>
+#include <set>
+#include <unordered_set>
 #include <map>
+#include <unordered_map>
+#include <functional>
 // Include other libraries
-#include <unistd.h>
+#include "boost/endian/conversion.hpp"  // Boost Endian library
+#include "boost/multi_array.hpp"        // Boost MultiArray library
+#include "boost/dynamic_bitset.hpp"     // Boost Dynamic Bitset library
 #include <getopt.h>
+#include <unistd.h>
 
 //#define MPI_ON // Comment out this line before committing!!
 #ifdef MPI_ON // "ifdef" options are defined during compilation
@@ -47,7 +57,7 @@
 #endif // __cplusplus
 
 // Disable assert() for the production version (we may want to merge Debug flag with this)
-#define NDEBUG
+//#define NDEBUG
 
 /***********************************/
 /********** SmallVec Part **********/
@@ -57,23 +67,23 @@
  * N.B.: template classes need to have the method definitions inside the header file, in order to let the linker work. Alternatively, you can put definitions in other file and include after declaration in the header file.
  */
 
-/*! \struct template <bool, class T, class U> __SelectIf_base
+/*! \class template <bool, class T, class U> struct __SelectIf_base
  *  \brief a template for struct __SelectIF to accept a bool as condition */
 template <bool, class T, class U>
 struct __SelectIf {};
 
-/*! \struct template <class T, class U> __SelectIf_true
+/*! \class template <class T, class U> struct __SelectIf_true
  *  \brief a template for struct __SelectIF to select T type if bool is true */
 template <class T, class U>
 struct __SelectIf<true, T, U> { typedef T type; };
 
-/*! \struct template <class T, class U> __SelectIf_false
+/*! \class template <class T, class U> struct __SelectIf_false
  *  \brief a template for struct __SelectIF to select U type if bool is false */
 template <class T, class U>
 struct __SelectIf<false, T, U> { typedef U type; };
 
-/*! \struct template <class T, class U> PromoteNumeric
- * this struct controls the type promotion, this struct nests many levels of selections. Read comments/explanations from inside and notice that comments start with new lines are different with comments after statements */
+/*! \class template <class T, class U> struct PromoteNumeric
+ *  \brief this struct controls the type promotion, this struct nests many levels of selections. Read comments/explanations from inside and notice that comments start with new lines are different with comments after statements */
 template <class T, class U>
 struct PromoteNumeric {
     typedef typename __SelectIf<
@@ -106,8 +116,12 @@ public:
     /*! \var T data[D]
      *  \brief data of elements of this vector */
     T data[D];
+
+    ////////////////////////////////////
+    /////////// Constructors ///////////
+    ////////////////////////////////////
     
-    /*! \fn SmallVec() : data{0} {}
+    /*! \fn SmallVec() : data{0}
      *  \brief the most basic constructor, list initialization with {0} */
     SmallVec() : data{0} {}
     
@@ -121,7 +135,7 @@ public:
     }
     
     /*
-     * If explicit keyword is applied to a copy constructor, it means that object of that class can't be copied when being passed tofunctions or when being returned from function - (this type of copying is called implicit copying). So statement "SmallVec<T, D> new_vec = old_vec;" will cause error during compilation. Passing SmallVec as an function argument by value or make it the return type of a function will also cause error, like "Func(old_vec)" or "SmallVec<T, D> Func()". Only explicit copying, i.e., "SmallVec<T, D> new_vec (old_vec);" is allowed. And only being passed to a function (or being returned from a funtion) by reference/pointer is allowed.
+     * If explicit keyword is applied to a copy constructor, it means that object of that class can't be copied when being passed to functions or when being returned from function - (this type of copying is called implicit copying). So statement "SmallVec<T, D> new_vec = old_vec;" will cause error during compilation. Passing SmallVec as an function argument by value or make it the return type of a function will also cause error, like "Func(old_vec)" or "SmallVec<T, D> Func()". Only explicit copying, i.e., "SmallVec<T, D> new_vec (old_vec);" is allowed. And only being passed to a function (or being returned from a functionn) by reference/pointer is allowed.
      */
     
     /*! \fn template <class U, typename std::enable_if<!(std::is_pointer<U>::value), int>::type = 0> explicit SmallVec(const U& scalar)
@@ -184,10 +198,14 @@ public:
     template <typename... Tail>
     SmallVec(typename std::enable_if<sizeof...(Tail)+1==D, T>::type head, Tail... tail) : data{head, T(tail)...} {}
     /*
-     * C++ has a special parameter type, ellipsis, that can be used to pass a varying number of arguments. It is called the ellipsis operator. Try to undersatnd it by recalling the usage of printf() in C where you can input any amount of arguments. Also, sizeof...() is used to count the number of arguments, which is different with sizeof()(reference: http://www.cplusplus.com/articles/EhvU7k9E/ )
+     * C++ has a special parameter type, ellipsis, that can be used to pass a varying number of arguments. It is called the ellipsis operator. Try to understand it by recalling the usage of printf() in C where you can input any amount of arguments. Also, sizeof...() is used to count the number of arguments, which is different with sizeof()(reference: http://www.cplusplus.com/articles/EhvU7k9E/ )
      * Then "data{ head, T(tail)... }" is called an initialization list. Usually it is for passing arguments to the constructor of a parent class.
      */
-    
+
+    /////////////////////////////////
+    /////////// Operators ///////////
+    /////////////////////////////////
+
     /*! \fn T operator[] ( const size_t i ) const
      *  \brief allow access with usual vector notation */
     T operator[] (const size_t i) const {
@@ -204,7 +222,7 @@ public:
         assert(i < D);
         return *(data+i);
     }
-    
+
     /*! \fn const SmallVec& operator +()
      *  \brief unary operations (sign): make +SmallVec return itself */
     const SmallVec& operator +() {
@@ -252,7 +270,7 @@ public:
     }
     
     /*! \fn template <class U> SmallVec<T, D>& operator *= (const U rhs)
-     *  \brief compound assignment operator *= */
+     *  \brief compound assignment operator *= with scalar */
     template <class U>
     SmallVec<T, D>& operator *= (const U rhs) {
         for (int i = 0; i != D; i++) {
@@ -260,9 +278,19 @@ public:
         }
         return *this;
     }
+
+    /*! \fn template <class U> SmallVec<T, D>& operator *= (const SmallVec<U, D>& rhs)
+ *  \brief compound assignment operator *= with class SmallVec */
+    template <class U>
+    SmallVec<T, D>& operator *= (const SmallVec<U, D>& rhs) {
+        for (int i = 0; i != D; i++) {
+            data[i] *= rhs[i];
+        }
+        return *this;
+    }
     
     /*! \fn template <class U> SmallVec<T, D>& operator /= (const U rhs)
-     *  \brief compound assignment operator /= */
+     *  \brief compound assignment operator /= with scalar */
     template <class U>
     SmallVec<T, D>& operator /= (const U rhs) {
         for (int i = 0; i != D; i++) {
@@ -270,6 +298,97 @@ public:
         }
         return *this;
     }
+
+    /*! \fn template <class U> SmallVec<T, D>& operator /= (const SmallVec<U, D>& rhs)
+*  \brief compound assignment operator /= with class SmallVec */
+    template <class U>
+    SmallVec<T, D>& operator /= (const SmallVec<U, D>& rhs) {
+        for (int i = 0; i != D; i++) {
+            data[i] /= rhs[i];
+        }
+        return *this;
+    }
+
+    /*! \fn template <class U> bool operator == (const SmallVec<U, D>& rhs) const
+     *  \brief overloading operator == */
+    template <class U>
+    bool operator == (const SmallVec<U, D>& rhs) const {
+        bool val = true;
+        for (int i = 0; i != D; i++) {
+            val = val && (data[i] == rhs[i]);
+        }
+        return val;
+    }
+
+    /*! \fn template <class U> bool operator != (const SmallVec<U, D>& rhs) const
+     *  \brief overloading operator != */
+    template <class U>
+    bool operator != (const SmallVec<U, D>& rhs) const {
+        return !(*this == rhs);
+    }
+
+    /*! \fn template <class U> inline bool operator < (const SmallVec<U, D>& rhs) const
+     *  \brief overloading operator <, we compare the norm of vectors. */
+    template <class U>
+    inline bool operator < (const SmallVec<U, D>& rhs) const {
+        return (this->Norm() < rhs.Norm());
+    }
+
+    /*! \fn template <class U> bool operator <= (const SmallVec<U, D>& rhs) const
+     *  \brief overloading operator <= */
+    template <class U>
+    bool operator <= (const SmallVec<U, D>& rhs) const {
+        if ((*this < rhs) || (*this == rhs)) return true;
+        return false;
+    }
+
+    /*! \fn template <class U> inline bool operator > (const SmallVec<U, D>& rhs) const
+     *  \brief overloading operator >, we compare the norm of vectors. */
+    template <class U>
+    inline bool operator > (const SmallVec<U, D>& rhs) const {
+        return (this->Norm() > rhs.Norm());
+    }
+
+    /*! \fn template <class U> bool operator >= (const SmallVec<U, D>& rhs) const
+     *  \brief overloading operator >= */
+    template <class U>
+    bool operator >= (const SmallVec<U, D>& rhs) const {
+        if((*this>rhs) || (*this==rhs)) return true;
+        return false;
+    }
+
+    /*! \fn friend std::ostream& operator << (std::ostream& stream, const SmallVec<T, D>& vec)
+ *  \brief overloading ostream operator, keep the format settings (outside this function) from being destroyed by the non-numeric characters output */
+    friend std::ostream& operator << (std::ostream& stream, const SmallVec<T, D>& vec) {
+        std::streamsize tmp_width = stream.width(); // this function return std::streamsize type, which depends on machine
+        std::streamsize tmp_precision = stream.precision();
+        char tmp_fill = stream.fill();
+        std::ios::fmtflags tmp_flags = stream.flags();  // format flags like "scientific" and "left" and "showpoint"
+
+        stream << std::setw(1);
+        stream << "(";
+        for (int i = 0; i < D-1; i++) {
+            stream.flags(tmp_flags);
+            stream << std::setfill(tmp_fill) << std::setprecision(static_cast<int>(tmp_precision)) << std::setw(static_cast<int>(tmp_width));
+            stream << vec.data[i];
+            stream << ", ";
+        }
+        stream.flags(tmp_flags);
+        stream << std::setfill(tmp_fill) << std::setprecision(static_cast<int>(tmp_precision)) << std::setw(static_cast<int>(tmp_width));
+        stream << vec.data[D-1];
+        stream << ")";
+        return stream;
+    }
+
+    ////////////////////////////////////////
+    /////////// Simple Iterators ///////////
+    ////////////////////////////////////////
+
+    // not implemented yet
+
+    ////////////////////////////////////////
+    /////////// Member Functions ///////////
+    ////////////////////////////////////////
     
     /*! \fn typename PromoteNumeric<T, double>::type Norm() const
      *  \brief calculate the norm of this vector, |x|, for at least double precision */
@@ -278,7 +397,7 @@ public:
         for (int i = 0; i != D; i++) {
             sum += data[i] * data[i];
         }
-        return sqrt(sum);
+        return std::sqrt(sum);
     }
     
     /*! \fn typename PromoteNumeric<T, double>::type Norm2() const
@@ -326,7 +445,8 @@ public:
     }
     
     /*! \fn template <class U> inline SmallVec<typename PromoteNumeric<T, U>::type, 3> ParaMultiply(const SmallVec<U, 3>& rhs) const
-     *  \brief give a new SmallVec, where data[i] = this[i] * rhs[i] */
+     *  \brief give a new SmallVec, where data[i] = this[i] * rhs[i]
+     *  Note: the multiply operator '*' has been overloaded to do this */
     template <class U>
     inline SmallVec<typename PromoteNumeric<T, U>::type, 3> ParaMultiply(const SmallVec<U, 3>& rhs) const {
         SmallVec<typename PromoteNumeric<T, U>::type, 3> tmp;
@@ -350,7 +470,7 @@ public:
     }
     
     /*! \fn template <class U, class V> int relclose(const SmallVec<U, D>& rhs, const V epsilon) const
-     *  \brief determinte (the relative difference between this_vector and rhs) divided by (the average length of them) is less than epsilon in each element */
+     *  \brief determine (the relative difference between this_vector and rhs) divided by (the average length of them) is less than epsilon in each element */
     template <class U, class V>
     int RelClose(const SmallVec<U, D>& rhs, const V epsilon) const {
         SmallVec<typename PromoteNumeric<T, U>::type, D> sum, diff;
@@ -375,59 +495,20 @@ public:
         return val;
     }
     
-    /*! \fn template <class U> bool operator == (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator == */
-    template <class U>
-    bool operator == (const SmallVec<U, D>& rhs) const {
-        bool val = true;
-        for (int i = 0; i != D; i++) {
-            val = val && (data[i] == rhs[i]);
-        }
-        return val;
-    }
-    
-    /*! \fn template <class U> bool operator != (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator != */
-    template <class U>
-    bool operator != (const SmallVec<U, D>& rhs) const {
-        return !(*this == rhs);
-    }
-    
-    /*! \fn template <class U> inline bool operator < (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator <, this is no point to compare each element. We compare the norm of vectors. */
-    template <class U>
-    inline bool operator < (const SmallVec<U, D>& rhs) const {
-        return (this->Norm() < rhs.Norm());
-    }
-    
-    /*! \fn template <class U> bool operator <= (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator <= */
-    template <class U>
-    bool operator <= (const SmallVec<U, D>& rhs) const {
-        if ((*this < rhs) || (*this == rhs)) return true;
-        return false;
-    }
-    
-    /*! \fn template <class U> inline bool operator > (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator >, this is no point to compare each element. We compare the norm of vectors. */
-    template <class U>
-    inline bool operator > (const SmallVec<U, D>& rhs) const {
-        return (this->Norm() > rhs.Norm());
-    }
-    
-    /*! \fn template <class U> bool operator >= (const SmallVec<U, D>& rhs) const
-     *  \brief overloading operator >= */
-    template <class U>
-    bool operator >= (const SmallVec<U, D>& rhs) const {
-        if((*this>rhs) || (*this==rhs)) return true;
-        return false;
-    }
-    
     /*! \fn SmallVec<T, D> SetZeros()
      *  \brief reset data to {0} */
     SmallVec<T, D> SetZeros() {
         for (int i = 0; i != D; i++) {
             data[i] = 0;
+        }
+        return *this;
+    }
+
+    /*! \fn SmallVec<T, D> AbsSelf()
+     *  \brief use abs() to each element */
+    SmallVec<T, D> AbsSelf() {
+        for (int i = 0; i != D; i++) {
+            data[i] = std::abs(data[i]);
         }
         return *this;
     }
@@ -454,33 +535,11 @@ public:
         return val;
     }
     
-    /*! \fn friend std::ostream& operator << (std::ostream& stream, const SmallVec<T, D>& vec)
-     *  \brief overloading ostream operator, keep the format settings (outside this function) from being destroyed by the non-numeric characters output */
-    friend std::ostream& operator << (std::ostream& stream, const SmallVec<T, D>& vec) {
-        std::streamsize tmp_width = stream.width(); // this function return std::streamsize type, which depends on machine
-        std::streamsize tmp_precision = stream.precision();
-        char tmp_fill = stream.fill();
-        std::ios::fmtflags tmp_flags = stream.flags();  // format flags like "scientific" and "left" and "showpoint"
-        
-        stream << std::setw(1);
-        stream << "(";
-        for (int i = 0; i < D-1; i++) {
-            stream.flags(tmp_flags);
-            stream << std::setfill(tmp_fill) << std::setprecision(static_cast<int>(tmp_precision)) << std::setw(static_cast<int>(tmp_width));
-            stream << vec.data[i];
-            stream << ", ";
-        }
-        stream.flags(tmp_flags);
-        stream << std::setfill(tmp_fill) << std::setprecision(static_cast<int>(tmp_precision)) << std::setw(static_cast<int>(tmp_width));
-        stream << vec.data[D-1];
-        stream << ")";
-        return stream;
-    }
-    
+
     /*
      * Overload a binary operator can be done either as a non-member function or a member function.
-     * For non-member function, all arguments are passed explicitly as the operator's operands. The lhs is the first argument and rhs is the second. To avoid the overhead of making a copy, operands are usually passed as reference. Take the addition as an example, "c = a + b" is equilavent to "c = operator+(a, b)".
-     * For member function, it is called by an object of the class. Since the object can be accessed in the function, it is in fact passed implicitly to the member function, hence overloading binary operator as a member function requires 1 (only rhs) or 3 arguments, otherwise the compiler gives warning. While calling the operator, the lhs is the object that calls the operator, the rhs is the very explicit argument (say only 1 argument). Take the addition as an example, "c = a + b" is equilavent to "c = a.operator+(b);"
+     * For non-member function, all arguments are passed explicitly as the operator's operands. The lhs is the first argument and rhs is the second. To avoid the overhead of making a copy, operands are usually passed as reference. Take the addition as an example, "c = a + b" is equivalent to "c = operator+(a, b)".
+     * For member function, it is called by an object of the class. Since the object can be accessed in the function, it is in fact passed implicitly to the member function, hence overloading binary operator as a member function requires 1 (only rhs) or 3 arguments, otherwise the compiler gives warning. While calling the operator, the lhs is the object that calls the operator, the rhs is the very explicit argument (say only 1 argument). Take the addition as an example, "c = a + b" is equivalent to "c = a.operator+(b);"
      * To avoid the complaint of compiler about member funtion with 2 arguments which overloads a binary operator, apply "friend" before the function declaration does the trick (e.g., operator << above). However, such an operator will have access to private part of this class.
      */
     
@@ -534,6 +593,18 @@ operator * (const T lhs, const SmallVec<U, D>& rhs) {
     return tmp;
 }
 
+/*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator * (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs)
+ *  \brief overloading binary operator * for class SmallVec times class SmallVec */
+template <class T, class U, int D>
+inline SmallVec<typename PromoteNumeric<T, U>::type, D>
+operator * (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
+    SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
+    for (int i = 0; i != D; i++) {
+        tmp.data[i] = lhs.data[i] * rhs.data[i];
+    }
+    return tmp;
+}
+
 /*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator / (const SmallVec<T, D>& lhs, const U rhs)
  *  \brief overloading binary operator / for class SmallVec (divided by scalar) */
 template <class T, class U, int D>
@@ -546,6 +617,37 @@ operator / (const SmallVec<T, D>& lhs, const U rhs) {
     return tmp;
 }
 
+/*! \fn template <class T, class U, int D> inline SmallVec<typename PromoteNumeric<T, U>::type, D> operator / (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs)
+ *  \brief overloading binary operator / for class SmallVec divided by class SmallVec */
+template <class T, class U, int D>
+inline SmallVec<typename PromoteNumeric<T, U>::type, D>
+operator / (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
+    SmallVec<typename PromoteNumeric<T, U>::type, D> tmp;
+    for (int i = 0; i != D; i++) {
+        tmp.data[i] = lhs.data[i] / rhs.data[i];
+    }
+    return tmp;
+}
+
+template<class T, class U, int D>
+bool SmallVecLessEq (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
+    bool val = true;
+    for (int i = 0; i != D; i++) {
+        val = val && (lhs[i] <= rhs[i]);
+    }
+    return val;
+};
+
+template<class T, class U, int D>
+bool SmallVecGreatEq (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
+    bool val = true;
+    for (int i = 0; i != D; i++) {
+        val = val && (lhs[i] >= rhs[i]);
+    }
+    return val;
+};
+
+
 /********************************************************/
 /********** Definitions of Numerical Varialbes **********/
 /********************************************************/
@@ -555,7 +657,7 @@ operator / (const SmallVec<T, D>& lhs, const U rhs) {
 constexpr int dim {3};
 
 /*! \class NumericalParameters
- *  \brief default numerical parameters, can be read from file */
+ *  \brief numerical parameters used in simulations, can be read from file */
 class NumericalParameters {
 private:
     
@@ -582,7 +684,11 @@ public:
     
     /*! \var SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.003125)}
      *  \brief the default cell side length */
-    SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.003125)};
+    SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.003125/2.)};
+
+    /*! \var double cell_volume
+     *  \brief the default cell volume */
+    double cell_volume {0.003125*0.003125*0.003125/8.};
     
     /*! \var double max_half_width
      *  \brief maximum half width of box
@@ -601,11 +707,67 @@ public:
     /*! \var double Omega
      *  \brief time unit */
     double Omega {1.0};
-    
+
+    /*! \var double solid_to_gas_ratio
+     *  \brief solid-to-gas ratio, usually 0.02 */
+    double solid_to_gas_ratio {0.02};
+
+    /*! \var std::vector<double> mass_fraction_per_species
+     *  \brief the fraction of total mass that each particle species has */
+    std::vector<double> mass_fraction_per_species {std::vector<double>(1, 1)};
+
+    /*! \var std::vector<double> mass_per_particle
+     *  \brief mass of one particle for each type */
+    std::vector<double> mass_per_particle; // {std::vector<double>(1, 03.82481121006927567e-9)};
+
+    /*! \var const double mass_ceres
+     *  \brief the mass of asteroid Ceres (in kg) */
+    const double mass_ceres = 9.0e20;
+
+    /*! \var double mass_total_code_units
+     *  \brief total particle mass in code unit */
+    double mass_total_code_units {0.002};
+
+    /*! \var const double PI
+     *  \brief the constant PI */
+    const double PI = 3.14159265358979323846;
+
+    /*! \var const double four_PI
+     *  \brief constant 4 * PI */
+    const double four_PI = 4. * PI;
+
+    /*! \var const double four_PI_over_three
+     *  \brief constant 4 * PI / 3 */
+    const double four_PI_over_three = PI * 4. / 3.;
+
+    /*! \var double four_PI_G
+     *  \brief the numerical value provided to Athena */
+    double four_PI_G {0.05};
+
+    /*! \var double G_tilde
+     *  \brief the code unit indicating the strength of self-gravity */
+    double G_tilde {four_PI_G / Omega / Omega}; // * rho_0 ?
+
+    /*! \var double mass_physical
+     *  \brief the physical mass in the box assuming 3 AU and MMSN (in kg) */
+    double mass_physical {(G_tilde/0.1)*1.3e24}; // For G=0.1, M_0 = rho_0*H^3 = 1.3e24
+
+    /*! \var double grav_constant
+     *  \brief the gravitational constant in code unit */
+    double grav_constant {four_PI_G / four_PI};
+
     /*! \var double shear_speed {q * Omega * box_length[0]}
      *  \brief q * Omega * Lx, shear distance per unit time */
     double shear_speed {q * Omega * box_length[0]};
-    
+
+    /*! \var unsigned int num_neighbors_in_knn_search
+     *  \brief determine how many (K) Nearest Neighbors that we need to search for density calculations */
+    unsigned int num_neighbors_in_knn_search {64};
+
+    /*! \var unsigned int num_neighbors_to_hop
+     *  \brief how many neighbors to search while looking for the densest neighbor */
+    unsigned int num_neighbors_to_hop {32};
+
     /*! \fn NumericalParameters()
      *  \brief constructor */
     NumericalParameters();
@@ -615,7 +777,8 @@ public:
     void CalculateNewParameters();
     
     /*! \fn void ReadNumericalParameters(std::string filename)
-     *  \brief read numerical parameters from file */
+     *  \brief read numerical parameters from file
+     *  \todo maybe we could support reading numerical parameters from Athena input files */
     void ReadNumericalParameters(std::string filename);
     
 };
@@ -650,14 +813,26 @@ public:
     /*! \var std::string max_rhop_vs_scale_file_path
      *  \brief output file for max_rhop at all scales */
     std::string max_rhop_vs_scale_file;
-    
+
+    /*! \var std::string mean_sigma_file
+     *  \brief output file for <Sigma_g>_{yz}(t) and <Sigma_p>_{yz}(t) */
+    std::string mean_sigma_file;
+
     /*! \var std::string input_const_path
      *  \brief input file for constant data */
     std::string input_const_path;
     
     /*! \var std::vector<std::string> lis_data_file_name
-     *  \brief file names construced (for particle's lis files) */
+     *  \brief file names (for particle's lis files) */
     std::vector<std::string> lis_data_file_name;
+    
+    /*! \var std::vector<std::string> vtk_data_file_name
+     *  \brief file names (for vtk files) */
+    std::vector<std::string> vtk_data_file_name;
+
+    /*! \var std::string planetesimals_file
+     *  \brief output file for basic planetesimal-info */
+    std::string planetesimals_file;
     
 #ifdef SMR_ON
     /*! \var std::string data_level
@@ -683,14 +858,6 @@ public:
      *  \brief simulation time step */
     double dt;
     
-    /*! \var double solid_to_gas_ratio
-     *  \brief solid-to-gas ratio, usually 0.02 */
-    double solid_to_gas_ratio {0.02};
-    
-    /*! \var std::vector<double> mass_per_particle
-     *  \brief mass of one particle for each type */
-    std::vector<double> mass_per_particle {std::vector<double>(03.82481121006927567e-9, 1)};
-    
     /*! \var std::vector<double> particle_scale_height;
      *  \brief particle scale height for all particle sizes */
     std::vector<double> particle_scale_height;
@@ -702,6 +869,22 @@ public:
     /*! \var std::vector<double> max_rhop_vs_scale
      *  \brief maximum sphere-based particle density at all length scales */
     std::vector<double> max_rhop_vs_scale;
+
+    /*! \var double vertical_flux
+     *  \brief vertical gas mass flux on vertical boundaries (per unit area) */
+    double vertical_flux {0.0};
+
+    /*! \var std::vector<double> mean_sigma
+     *  \brief <Sigma_g>_{yz}(t) and <Sigma_p>_{yz}(t) */
+    std::vector<double> mean_sigma;
+
+    /*! \var double max_planetesimal_mass
+     *  \brief the maximum mass in the planetesimals */
+    double max_planetesimal_mass {0};
+
+    /*! \var double total_planetesimal_mass
+     *  \brief total mass in planetesimals */
+    double total_planetesimal_mass {0};
 };
 
 /*! \enum OutputLevel
@@ -753,6 +936,10 @@ public:
      *  \brief set this flag to prevent making ghost particles */
     int no_ghost_particle_flag {0};
     
+    /*! \var int tmp_calculation_flag
+     *  \brief set this flag to do some temporary calculations */
+    int tmp_calculation_flag {0};
+    
     /*! \var int help_flag
      *  \brief set this flag to print out usage information */
     int help_flag {0};
@@ -800,20 +987,21 @@ public:
      *  \brief start/end number and interval fo the entir file loop */
     int start_num, end_num, interval;
     
-    /*! \var int num_file
+    /*! \var int num_files
      *  \brief the number of files in total */
-    int num_file;
+    int num_files;
     
-    /*! \var int num_cpu
+    /*! \var int num_cpus
      *  \brief the number of processors used in simulation */
-    int num_cpu;
+    int num_cpus;
     
     /*! \var int width {15}
      *  \brief set default width of one data unit during output */
     int width {15};
     
     /*! \var int column {4}
-     *  \brief data column in basic_analyses result file */
+     *  \brief data column in basic_analyses result file
+     *  Here we start with 2, time and max(rho_p) */
     int column {2};
     
     /*! \fn Basic_IO_Operations()
@@ -831,6 +1019,10 @@ public:
     /*! \fn int PrintUsage(const char *program_name)
      *  \brief print usage */
     void PrintUsage(const char *program_name);
+
+    /*! \fn std::string LocalTime()
+     *  \brief return a string containing the date and time information */
+    std::string LocalTime();
     
     /*! \fn void PrintStars(std::ostream &stream, const OutputLevel &output_level)
      *  \brief print 80 * symbols as a divider line */
@@ -869,9 +1061,9 @@ class MPI_Wrapper {
 private:
     
 public:
-    /*! \var int num_proc
+    /*! \var int num_processors
      *  \brief number of processors */
-    int num_proc;
+    int num_processors;
     
     /*! \var int rank, master
      *  \brief rank of this cpu / master cpu */
@@ -881,45 +1073,50 @@ public:
      *  \brief begin/end/step of the file loop handled by this cpu */
     int loop_begin, loop_end, loop_step;
     
-#ifdef MPI_ON
+#ifndef MPI_ON
+    /*! \alias using file_obj = std::ofstream
+     *  \brief define a type for opening files */
+    using file_obj = std::ofstream;
+
+#else // MPI_ON
     /*! \var MPI_Comm world
      *  \brief a wrapper of MPI_COMM_WORLD */
     MPI_Comm world;
-    
+
     /*! \var MPI_Status status
      *  \brief MPI status */
     MPI_Status status;
-    
-    /*! \var MPI_Offset offset
-     *  \brief stream offset used during parallel file I/O */
-    MPI_Offset offset {0};
-    
-    /*! \var MPI_Offset header_offset
-     *  \brief stream offset used during parallel file I/O */
-    MPI_Offset header_offset {0};
-    
-    /*! \var using file_obj = MPI_File
+
+    /*! \alias using file_obj = MPI_File
      *  \brief define a type for opening files */
     using file_obj = MPI_File;
-    
-#else // MPI_ON
-    /*! \var using file_obj = std::ofstream
-     *  \brief define a type for opening files */
-    using file_obj = std::ofstream;
-    
+
+    /*! \var MPI_Comm file_writing_communicator
+     *  \brief MPI communicator used for writing files (to avoid Bcase error while num_files < num_processors) */
+    MPI_Comm file_writing_communicator;
+
+    /*! \var int file_writing_master
+     *  \brief mark out the processor used to write file headers */
+    int file_writing_master;
+
+    /*! \var std::map<file_obj, MPI_Offset> offset
+     *  \brief stream offset used during parallel file I/O */
+    std::map<file_obj, MPI_Offset> offset;
+
+    /*! \var std::map<file_obj, MPI_Offset> header_offset
+     *  \brief stream offset used during parallel file I/O */
+    std::map<file_obj, MPI_Offset> header_offset;
+
 #endif // MPI_ON
     
     /*! \var std::vector<file_obj> result_files
      *  \brief files to output results */
     std::vector<file_obj> result_files;
     
-    /*! \var std::map<std::string, std::vector<file_obj>::iterator> files
-     *  \brief mapping file names into result_files vector */
-    std::map<std::string, std::vector<file_obj>::iterator> files;
-    
-    /*! \var file_obj max_rhop_vs_scale_file
-     *  \brief default file to output max_rhop at all scales */
-    file_obj max_rhop_vs_scale_file;
+    /*! \var std::map<std::string, std::vector<file_obj>::size_type> file_pos;
+     *  \brief mapping file names into result_files vector
+     *  I tried to use std::map<std::string, std::vector<file_obj>::iterator>, but ended up with segmentation fault on std::ofstream. It seems like using the iterator of file_obj is not a good idea. */
+    std::map<std::string, std::vector<file_obj>::size_type> file_pos;
     
     /*! \fn MPI_Wrapper()
      *  \brief constructor */
@@ -929,9 +1126,9 @@ public:
      *  \brief MPI initializaion */
     void Initialization(int argc, const char * argv[]);
     
-    /*! \fn void Determine_Loop(int num_file)
+    /*! \fn void Determine_Loop(int num_files)
      *  \brief determine the begin/end/step for file loop */
-    void DetermineLoop(int num_file);
+    void DetermineLoop(int num_files);
     
     /*! \fn int Barrier()
      *  \brief a wrapper of MPI_Barrier */
@@ -945,9 +1142,9 @@ public:
      *  \brief return a string contains "Processor myrank: " */
     std::string RankInfo();
     
-    /*! \fn void OpenFile(file_obj &__file, std::string filename)
+    /*! \fn void OpenFile(std::string filename)
      *  \brief open file */
-    void OpenFile(file_obj &__file, std::string file_name);
+    void OpenFile(std::string file_name);
     
     /*! \fn void WriteSingleFile(file_obj &__file, std::ostringstream &content)
      *  \brief all processor write into a file, use with cautions -> read the assumptions in descriptions
@@ -1079,5 +1276,20 @@ template <typename T, typename... Args>
 T MinOf(const T &a, const T &b, Args... args) {
     return MaxOf(std::min(a, b), args...);
 }
+
+/*! \namespace sn
+ *  \brief store simplified names */
+namespace sn {
+    
+    /*! \alias using b_range = boost::multi_array_types::index_range
+     *  \brief used to generate boost index range */
+    using b_range = boost::multi_array_types::index_range;
+    
+    // RL: consider add more here
+
+    using dvec = SmallVec<double, dim>;
+}
+
+
 
 #endif /* global_hpp */

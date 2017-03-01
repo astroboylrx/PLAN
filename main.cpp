@@ -41,16 +41,14 @@ int main(int argc, const char * argv[])
     /********** Step I: Initialization **********/
     mpi->Initialization(argc, argv);
     timer[__total_elapse_time].StartTimer();
+    progIO->out_content << "Program begins now (local time: " << progIO->LocalTime() << ")." << std::endl;
+    progIO->Output(std::cout, progIO->out_content, __normal_output, __master_only);
+    progIO->PrintStars(std::cout, __normal_output);
     progIO->Initialize(argc, argv);
-    progIO->log_info << "Program begins now.\n";
-    progIO->Output(std::clog, progIO->log_info, __normal_output, __master_only);
-    progIO->PrintStars(std::clog, __normal_output);
-    
-    mpi->DetermineLoop(progIO->num_file);
-    ParticleSet<dim> particle_set;
-    BHtree<dim> tree;
-    std::vector<Planetesimal<dim>> planetesimals;
-    
+    mpi->DetermineLoop(progIO->num_files);
+    DataSet<float, dim> ds;
+    //sleep(30);
+        
     /********** Step II: Pre-loop Work **********/
     BasicAnalysesPreWork();
     
@@ -58,23 +56,26 @@ int main(int argc, const char * argv[])
     for (int loop_count = mpi->loop_begin; loop_count <= mpi->loop_end; loop_count += mpi->loop_step) {
         
         /***** Step III-A, read original data and perform basic analyses *****/
-        particle_set.ReadLisFile(loop_count);
-        BasicAnalyses(particle_set, tree, loop_count);
+        timer[__tmp_used_timer].StartTimer();
+        ds.particle_set.ReadLisFile(loop_count);
+        //ds.vtk_data.ReadVtkFile(loop_count);
+        timer[__tmp_used_timer].StopTimer();
+        progIO->out_content << "Reading loop_count (" << loop_count << ") cost " << timer[__tmp_used_timer].GiveTime() << " seconds\n";
+        progIO->Output(std::cout, progIO->out_content, __more_output, __all_processors);
+
+        BasicAnalyses(ds, loop_count);
         
         if (progIO->flags.find_clumps_flag || progIO->flags.density_vs_scale_flag) {
-            particle_set.MakeGhostParticles(progIO->numerical_parameters);
-            tree.BuildTree(progIO->numerical_parameters, particle_set);
-            //tree.max_leaf_size = static_cast<unsigned int>(tree.max_leaf_size*(tree.num_nodes/(particle_set.num_total_particle/15.0)));
-            //progIO->log_info << "Now change tree.max_leaf_size to " << tree.max_leaf_size << std::endl;
-            //progIO->Output(std::clog, progIO->log_info, __even_more_output, __all_processors);
-            //tree.BuildTree(progIO->numerical_parameters, particle_set);
+            ds.particle_set.MakeGhostParticles(progIO->numerical_parameters);
+            ds.tree.BuildTree(progIO->numerical_parameters, ds.particle_set);
             
-            tree.CheckTree(tree.root, tree.root_level, tree.root_center, tree.half_width);
-            BasicAnalysesWithTree(particle_set, tree, loop_count);
+            ds.tree.CheckTree(ds.tree.root, ds.tree.root_level, ds.tree.root_center, ds.tree.half_width);
+            BasicAnalysesWithTree(ds, loop_count);
 
             /***** Step III-B, identity high density region and find planetesimals *****/
-            tree.FindPlanetesimals();
-            
+            ds.tree.FindPlanetesimals(ds, BHtree<dim>::QseudoQuadraticSplinesKernel<float>, loop_count);
+            ds.planetesimal_list.WriteBasicResults(loop_count);
+
         } // if (progIO->flags.find_clumps_flag)
         
     }
@@ -83,12 +84,12 @@ int main(int argc, const char * argv[])
     BasicAnalysesPostWork();
     mpi->Barrier();
     timer[__waiting_time].StopTimer();
-    
-    progIO->log_info << "Program ends now. Elapsed time: " << timer[__total_elapse_time].GiveTime() << "\n";
-    progIO->PrintStars(std::clog, __normal_output);
-    progIO->Output(std::clog, progIO->log_info, __normal_output, __master_only);
-    
     mpi->Finalize();
+
+    std::flush(std::clog);
+    progIO->PrintStars(std::cout, __normal_output);
+    progIO->out_content << "Program ends now (local time: " << progIO->LocalTime() << "). Elapsed time: " << timer[__total_elapse_time].GiveTime() << " seconds.\n";
+    progIO->Output(std::cout, progIO->out_content, __normal_output, __master_only);
 
     return 0;
 }

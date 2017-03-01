@@ -1,30 +1,30 @@
-CXX	  = mpicxx
+# Generic Makefile
+# Author: Rixin Li
 
-OPTIMIZE  = -O3 -m64 -Wall #-g
+CC           = mpicc
+CXX          = mpicxx
 
-SOURCES   = main.cpp global.cpp tree.cpp analyses.cpp
-OBJECTS   = $(SOURCES:.cpp=.o)
-INCL      = global.hpp tree.hpp analyses.hpp
+SRC_CXX      = $(wildcard *.cpp)
+SOURCES      = $(SRC_CXX)
+OBJECTS      = $(SRC_CXX:.cpp=.o)
+INCL         = $(wildcard *.hpp)
+EXEC         = plan
 
-CXXFLAGS  = -std=c++11 -I/opt/local/include/gcc5 -I/opt/local/include/libomp -I/opt/local/include/mpich-mp
-LDFLAGS   = -L/opt/local/lib/gcc5 -L/opt/local/lib/libomp -L/opt/local/lib/mpich-mp
-LIBS      = -lm -lmpicxx -lmpi -lpmpi
-
-OPTIONS   = -DMPI_ON
-
-EXEC      = plan
+CXXFLAGS     = 
+LDFLAGS      = 
+LIBS         = -lmpi_cxx -lmpi
+OPTIMIZE     = -O3 -m64 -Wall -std=c++11 -DMPI_ON -DNDEBUG
 
 all: $(SOURCES) $(EXEC)
 
-$(EXEC): $(OBJECTS) 
+$(EXEC): $(OBJECTS)
 	$(CXX) $(OPTIMIZE) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@
 	rm $(OBJECTS)
-.cpp.o:
-	$(CXX) $(OPTIMIZE) $(OPTIONS) $(CXXFLAGS) -c $< -o $@
 
-.PHONY : clean
+%.o: %.cpp
+	$(CXX) $(OPTIMIZE) $(CXXFLAGS) -c $< -o $@
+
+.phony : clean
 
 clean:
-	 rm -f $(OBJECTS) $(EXEC)
-
-#end
+	rm -f $(OBJECTS) $(EXEC)

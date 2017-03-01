@@ -14,27 +14,29 @@
 /*! \fn void BasicAnalysesPreWork()
  *  \brief open default result file and write file header */
 void BasicAnalysesPreWork() {
+    // RL: consider creating a map to store flag-file pairs, then we can loop through them to open them
+    std::vector<std::string> files_to_open;
     if (progIO->flags.basic_analyses_flag) {
-        mpi->result_files.resize(mpi->result_files.size()+1);
-        mpi->files[progIO->file_name.output_file_path] = (--mpi->result_files.end());
-        mpi->OpenFile(*mpi->files[progIO->file_name.output_file_path], progIO->file_name.output_file_path);
-        progIO->out_content << std::setw(progIO->width) << std::setfill(' ') << "#time" << std::setw(progIO->width) << "max(rho_p)";
-        mpi->WriteSingleFile(*mpi->files[progIO->file_name.output_file_path], progIO->out_content, __master_only);
+        files_to_open.push_back(progIO->file_name.output_file_path);
+        if (dim == 3) {
+            files_to_open.push_back(progIO->file_name.mean_sigma_file);
+        }
     }
     if (progIO->flags.density_vs_scale_flag) {
-        mpi->result_files.resize(mpi->result_files.size()+1);
-        mpi->files[progIO->file_name.max_rhop_vs_scale_file] = (--mpi->result_files.end());
-        mpi->OpenFile(*mpi->files[progIO->file_name.max_rhop_vs_scale_file], progIO->file_name.max_rhop_vs_scale_file);
+        files_to_open.push_back(progIO->file_name.max_rhop_vs_scale_file);
+    }
+    if (progIO->flags.find_clumps_flag) {
+        files_to_open.push_back(progIO->file_name.planetesimals_file);
+    }
+    for (auto &it : files_to_open) {
+        mpi->OpenFile(it);
     }
 }
 
 /*! \fn void BasicAnalysesPostWork()
  *  \brief close default result file  */
 void BasicAnalysesPostWork() {
-    if (progIO->flags.basic_analyses_flag) {
-        mpi->CloseFile(*mpi->files[progIO->file_name.output_file_path]);
-    }
-    if (progIO->flags.density_vs_scale_flag) {
-        mpi->CloseFile(*mpi->files[progIO->file_name.max_rhop_vs_scale_file]);
+    for (auto &it: mpi->result_files) {
+        mpi->CloseFile(it);
     }
 }
