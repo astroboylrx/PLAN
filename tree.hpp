@@ -1171,10 +1171,18 @@ public:
     /*! \var double density
      *  \brief local particle density */
     double density;
-    
-    /*! \var int id
-     *  \brief particle ID in total particle set */
-    int id;
+
+    /*! \var uint32_t id_in_run
+     *  \brief particle ID in the simulation */
+    uint32_t id_in_run;
+
+    /*! \var uint16_t cpu_id
+     *  \brief the processor ID this particle belongs to */
+    uint16_t cpu_id;
+
+    /*! \var uint32_t id
+     *  \brief particle ID in total particle set (sometimes id_in_run is not contiguous) */
+    uint32_t id;
     
     /*! \fn Particle<D>& operator = (const Particle &rhs)
      *  \brief assignment operator = */
@@ -1346,17 +1354,21 @@ public:
         }
         
         num_total_particles = num_particles;
+        uint32_t tmp_num_particles_in_each_processor = num_total_particles / progIO->num_cpus;
         progIO->log_info << ", num_particles = " << num_particles << "; || ";
         
         AllocateSpace(num_particles);
         
         // Thrid step, read particle data
         uint32_t tmp_id = 0;
+        unsigned long tmp_long;
+        unsigned int tmp_int;
         Particle<D> *p;
         size_t D_float = D * sizeof(float);
         size_t one_float = sizeof(float);
         size_t one_int = sizeof(int);
-        size_t one_ili = one_int + sizeof(long) + one_int;
+        size_t one_long = sizeof(long);
+        //size_t one_ili = one_int + sizeof(long) + one_int;
         
         for (std::vector<std::string>::iterator it = begin; it != end; it++) {
             lis_file.open(it->c_str(), std::ios::binary);
@@ -1383,8 +1395,21 @@ public:
                     p->density = static_cast<double>(tmp_float_value);
                     std::advance(tmp_char, one_float);
                     std::memcpy((char*)&p->property_index, tmp_char, one_int);
-                    std::advance(tmp_char, one_ili);
-                    p->id = tmp_id++;
+
+                    std::advance(tmp_char, one_int);
+                    std::memcpy((char*)&tmp_long, tmp_char, one_long);
+                    p->id_in_run = static_cast<uint32_t>(tmp_long);
+                    std::advance(tmp_char, one_long);
+                    std::memcpy((char*)&tmp_int, tmp_char, one_int);
+                    p->cpu_id = static_cast<uint16_t>(tmp_int);
+                    std::advance(tmp_char, one_int);
+                    p->id = p->cpu_id * tmp_num_particles_in_each_processor + p->id_in_run;
+
+                    // RL: previously, we didn't consider the particle ID in the simulations
+                    // Fortunately, sampling in Athena only output the first XXX particles in each processor
+                    //std::advance(tmp_char, one_ili);
+                    //p->id = tmp_id;
+                    tmp_id++;
                 }
                 lis_file.close();
             } else { // if (lis_file.is_open())
@@ -1439,14 +1464,16 @@ public:
             progIO->log_info << ", num_particles = " << num_particles << "; || ";
             
             AllocateSpace(num_particles);
+            uint32_t tmp_num_particles_in_each_processor = num_particles / progIO->num_cpus;
             
             // Thrid step, read particle data
-            uint32_t tmp_id = 0;
+            uint32_t tmp_id = 0; unsigned long tmp_long; unsigned int tmp_int;
             Particle<D> *p;
             size_t D_float = D * sizeof(float);
             size_t one_float = sizeof(float);
             size_t one_int = sizeof(int);
-            size_t one_ili = one_int + sizeof(long) + one_int;
+            size_t one_long = sizeof(long);
+            //size_t one_ili = one_int + one_long + one_int;
             
             std::stringstream content;
             content << lis_file.rdbuf();
@@ -1468,8 +1495,21 @@ public:
                 p->density = static_cast<double>(tmp_float_value);
                 std::advance(tmp_char, one_float);
                 std::memcpy((char*)&p->property_index, tmp_char, one_int);
-                std::advance(tmp_char, one_ili);
-                p->id = tmp_id++;
+
+                std::advance(tmp_char, one_int);
+                std::memcpy((char*)&tmp_long, tmp_char, one_long);
+                p->id_in_run = static_cast<uint32_t>(tmp_long);
+                std::advance(tmp_char, one_long);
+                std::memcpy((char*)&tmp_int, tmp_char, one_int);
+                p->cpu_id = static_cast<uint16_t>(tmp_int);
+                std::advance(tmp_char, one_int);
+                p->id = p->cpu_id * tmp_num_particles_in_each_processor + p->id_in_run;
+
+                // RL: previously, we didn't consider the particle ID in the simulations
+                // Fortunately, sampling in Athena only output the first XXX particles in each processor
+                //std::advance(tmp_char, one_ili);
+                //p->id = tmp_id;
+                tmp_id++;
             }
             lis_file.close();
         } else { // if (lis_file.is_open())
@@ -3342,6 +3382,8 @@ public:
             file_planetesimals << std::setw(10) << tmp_num_particles << std::setw(24) << it.second.total_mass << std::setw(24) << it.second.Hill_radius << std::setw(24) << it.second.particles.back().second << std::setw(24) << it.second.total_mass / (progIO->numerical_parameters.four_PI_over_three * pow(it.second.particles.back().second, 3)) << std::endl;
         }
         file_planetesimals.close(); //*/
+
+        // todo: output detailed particle list in the planetesimals for further analysis
     }
 
 };
