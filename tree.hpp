@@ -16,18 +16,14 @@
 
 #include "global.hpp"
 
-/*! \class template <class T, int D> DataSet
- *  \brief data set that encapsulates other data classes
- *  \tparam T type of data
- *  \tparam D dimension of data */
-template <class T, int D>
-class DataSet; // declare it at first since some functions need it
+// declare all important classes first
 
-/*! \class template <int D> Planetesimal
- *  \brief data for one planetesimal structure
- *  \tparam D dimension of data*/
 template <int D>
-class Planetesimal; // declare it at first since some functions need it
+class Planetesimal;                 /*!< data for one planetesimal structure */
+
+template <class T, int D>
+class DataSet;              /*!< data set that encapsulates other data classes */
+
 
 /******************************/
 /********** Vtk Part **********/
@@ -1707,102 +1703,102 @@ public:
 #ifdef __GNUC__
     using uint128_t = __uint128_t;
 #endif /* __GNUC __ */
-    
+
 private:
     /*
      * Below are useful constants worked for dilate3_32
      */
-    
+
     /*! \var uint128_t m1
      *  \brief binary: {0...63...0} 1 {0...63...0} 1 */
     uint128_t m1;
-    
+
     /*! \var uint128_t m2
      *  \brief binary: {0...63...0} 1 {0...31...0} 1 {0...31...0} 1 */
     uint128_t m2;
-    
+
     /*! \var uint128_t c1
      *  \brief binary: {1...32...1}{0...64...0}{1...32...1} */
     uint128_t c1;
-    
+
     /*! \var uint128_t c2
      *  \brief binary: {0...16...0} {{1...16...1}{0...32...0}}x2 {1...16...1} */
     uint128_t c2;
-    
+
     /*! \var uint128_t c3
      *  \brief binary: {{1...8...1}{0...16...0}}x5 {1...8...1} */
     uint128_t c3;
-    
+
     /*! \var uint128_t c4
      *  \brief binary: {000011110000}x10 {00001111} */
     uint128_t c4;
-    
+
     /*! \var uint128_t c5
      *  \brief binary: {110000}x21 {11} */
     uint128_t c5;
-    
+
     /*! \var uint128_t c6
      *  \brief binary: {01} {001}x42 */
     uint128_t c6;
-    
+
     /*! \var uint128_t upper32mask0
      *  \brief binary {0...32...0}{1...96...1} */
     uint128_t upper32mask0;
-    
+
     /*
      * Magic numbers for double2int: note that the double 0x1p+0(=1 in decimal) cannot be converted this way, so that the range of numbers is, strictly,  [0, 1). This two magic number make sure that the only 2^32 particles can be distinguished in one dimension. In other word, the minimum distance between two particles (or to be recognized as two particles) in one dimension case is 1.0/2^32 = 2.3283e-10.
      */
-    
+
     /*! \var static constexpr double MAGIC = 6755399441055744.0
      *  \brief MAGIC = 2^52 + 2^51 = (0x0018000000000000)_16 */
     static constexpr double MAGIC = 6755399441055744.0;
     /*! \var static constexpr double MAXIMUMINTEGER = 4294967294.0
      *  \brief MAGIC = 2^32 - 2 = (0x00000000FFFFFFFE)_16 */
     static constexpr double MAXIMUMINTEGER = 4294967294.0;
-    
+
 public:
     // define name alias for intuitive definition
     /*! \alias using morton_key = uint128_t
      *  \brief define a type equivalent to uint128_t for morton key */
     using morton_key = uint128_t;
-    
+
     /*! \fn BaseMortonKey()
      *  \brief constructor */
     BaseMortonKey();
-    
+
     /*! \fn ~BaseMortonKey()
      *  \brief destructor */
     ~BaseMortonKey();
-    
+
     /*! \fn uint32_t Double2Int(double d)
      *  \brief convert a double on [0, 1) to an unsigned 32 bit integer */
     uint32_t Double2Int(double d);
-    
+
     /*! \fn void InitializeMortonConstants()
      *  \brief initialize constants used in future calculations */
     void InitializeMortonConstants();
-    
+
     /*! \fn inline int Key8Level(morton_key &m_key, int &level)
      *  \brief extract info (three digits) of specific level from the 96-bit key */
     inline int Key8Level(morton_key m_key, int level) {
         int shr = 93 - 3 * (level - 1);
         return (m_key>>shr) & 7UL; // 7UL = {0...60...0}{0111}
     }
-    
+
     /*! \fn void OutKey(std::ostream &stream, morton_key m_key)
      *  \brief output the particle index and its key */
     void OutKey(std::ostream &stream, morton_key m_key);
-    
+
     /*! \fn inline int ParticleIndex(morton_key m_key)
      *  \brief return the particle index from the Morton Key */
     inline int ParticleIndex(morton_key m_key) {
         return (m_key>>96);
     }
-    
+
     /*! \fn morton_key Dilate3_Int32(int pos)
      *  \brief spread the bits of pos 3 apart: i.e., {1011} becomes {001 000 001 001} */
     morton_key Dilate3_Int32(int pos);
-    
+
 };
 
 /*
@@ -1822,28 +1818,28 @@ struct AscendingMorton {
 template <int D>
 class MortonKey : public BaseMortonKey {
 private:
-    
+
 public:
     /*! \alias using ivec = SmallVec<int, D>
      *  \brief define a vector of int type */
     using ivec = SmallVec<int, D>;
-    
+
     /*! \alias using fvec = SmallVec<float, D>
      *  \brief define a vector of float type */
     using fvec = SmallVec<float, D>;
-    
+
     /*! \alias using dvec = SmallVec<double, D>
      *  \brief define a vector of double type */
     using dvec = SmallVec<double, D>;
-    
+
     /*! \var dvec scale
      *  \brief scale the box length to 1 */
     dvec scale;
-    
+
     /*! \var dvec boxmin, boxmax
      *  \brief the bounding box in user coordinates to be mapped to [0, 1)^D */
     dvec boxmin, boxmax;
-    
+
     /*! \fn InitMortonKey(dvec __boxmin, dvec __boxmax);
      *  \brief initialize the space scale, set base for calculations of Morton Keys */
     void InitMortonKey(dvec __boxmin, dvec __boxmax) {
@@ -1853,7 +1849,7 @@ public:
             scale[d] = 1.0 / (boxmax[d] - boxmin[d]);
         }
     }
-    
+
     /*! \fn template <class U> Morton(const SmallVec<U, D> &pos, int index)
      *  \brief convert a position vector pos and particle index into a 128-bit Morton Key */
     template <class U>
@@ -1862,14 +1858,14 @@ public:
         for (int d = 0; d != D; d++) {
             pos_scaled[d] *= scale[d];
         }
-        
+
         SmallVec<uint32_t, D> int_pos;
         for (int d = 0; d != D; d++) {
             int_pos[d] = Double2Int(pos_scaled[d]);
         }
         return Morton(int_pos, index);
     }
-    
+
     /*! \fn Morton(const SmallVec<uint32_t, D> &pos, int index)
      *  \brief overloading Morton above for uint32_t */
     morton_key Morton(const SmallVec<uint32_t, D> &pos, int index) {
@@ -1879,7 +1875,7 @@ public:
         }
         return result;
     }
-    
+
 };
 
 
@@ -2295,7 +2291,7 @@ public:
             particle_list[i].pos = particle_set[i].pos;
             particle_list[i].vel = particle_set[i].vel;
             particle_list[i].mass = progIO->numerical_parameters.mass_per_particle[particle_set[i].property_index];
-            particle_list[i].original_id = particle_set[i].id; // original index of particles, after sorting by morton key, the order changes
+            particle_list[i].original_id = i; // != particle_set[i].id, it is the original index of particles, after sorting by morton key, the order changes
         }
         
         // compute Morton Keys and sort particle_list by Morton order
@@ -2363,6 +2359,8 @@ public:
         assert(node_ptr + 1 == num_nodes);
         delete [] morton;
         morton = nullptr;
+
+        CheckTree(root, root_level, root_center, half_width);
 
         // calculate members used to speed up density-kernel-calculations
         cell_length = progIO->numerical_parameters.cell_length;
@@ -2779,25 +2777,6 @@ public:
         }
     }
 
-    /*! \fn template <class T> static double TopHatDensityKernel(const DataSet<T, D> &ds, const double radius, uint32_t self_id, uint32_t *indices)
-     *  \brief use a top-hat kernel for density calculation
-     *  This function simply use total_mass_in_radius / spherical_volume_by_radius */
-    template <class T>
-    static double TopHatDensityKernel(const DataSet<T, D> &ds, const double radius, uint32_t self_id, uint32_t *indices) {
-        double mass = 0;
-        for (int i = 0; i != progIO->numerical_parameters.num_neighbors_in_knn_search; i++) {
-            // static member function, only have access to static data members, so use ds.tree
-            mass += ds.tree.particle_list[i].mass;
-        }
-
-        // if all those KNNs locate at the same place, we need this smoothing_length to avoid "inf" density
-        //double smoothing_length = progIO->numerical_parameters.cell_length[0]/8.;
-        //radius += smoothing_length
-        // since I use sink particles to ensure there is no overlap particles in space
-        double tmp_volume = progIO->numerical_parameters.four_PI_over_three * std::pow(radius, 3);
-        return mass/tmp_volume;
-    }
-
     /*! \fn double QuadraticSpline(dvec dist) const
      *  \brief calculate spatial weight using (1D Quadratic Spline kernel)^D */
     double QuadraticSpline(dvec dist) const {
@@ -2952,6 +2931,7 @@ public:
 
         // 4, merge bound clumps
         // RL: the order of the iterations through an unordered_map is not guaranteed to be the same. So don't count on it. In the merging process, it could be "A" eats "B" or "B" eats "A", which depends on who come first. But it does not affect the final results.
+        // \todo: compare this kind of merging with "merging depending on the Hill Radius".
         mask.resize(ds.planetesimal_list.planetesimals.size());
         mask.set();
 
@@ -2961,36 +2941,45 @@ public:
             double r_p1 = tmp_p1->second.particles.back().second;
 
             if (mask[tmp_p1_mask]) {
-                auto tmp_p2 = tmp_p1;
-                tmp_p2++;
-                auto tmp_p2_mask = tmp_p1_mask+1;
 
-                while (tmp_p2 != ds.planetesimal_list.planetesimals.end()) {
-                    if (!mask[tmp_p2_mask]) {
+                // we indeed need this since one loop of merging may not be enough
+                // some clump will grow during merging, but they will miss some clumps at front of the iteration
+                int merge_happened_flag = 1;
+
+                while (merge_happened_flag) {
+                    merge_happened_flag = 0;
+                    auto tmp_p2 = ds.planetesimal_list.planetesimals.begin(); //tmp_p1;
+                    auto tmp_p2_mask = 0; //tmp_p1_mask+1;
+
+                    while (tmp_p2 != ds.planetesimal_list.planetesimals.end()) {
+                        if (!mask[tmp_p2_mask] || tmp_p2_mask==tmp_p1_mask) {
+                            tmp_p2++;
+                            tmp_p2_mask++;
+                            continue;
+                        }
+
+                        double r_p2 = tmp_p2->second.particles.back().second;
+                        double center_dist = (tmp_p1->second.center_of_mass-tmp_p2->second.center_of_mass).Norm();
+
+                        if (center_dist < std::max(r_p1, r_p2)) {
+                            // one contains another, just merge
+                            tmp_p1->second.MergeAnotherPlanetesimal(tmp_p2->second, particle_list);
+                            merge_happened_flag = 1;
+                            r_p1 = tmp_p1->second.particles.back().second;
+                            mask[tmp_p2_mask].flip();
+                            peaks_to_be_deleted.push_back(tmp_p2->first);
+                        } else if (center_dist < (r_p1 + r_p2) && ds.planetesimal_list.IsGravitationallyBound(tmp_p1->second, tmp_p2->second)) {
+                            // they intersect and bound
+                            tmp_p1->second.MergeAnotherPlanetesimal(tmp_p2->second, particle_list);
+                            merge_happened_flag = 1;
+                            r_p1 = tmp_p1->second.particles.back().second;
+                            mask[tmp_p2_mask].flip();
+                            peaks_to_be_deleted.push_back(tmp_p2->first);
+                        }
+                        // we don't merge other cases
                         tmp_p2++;
                         tmp_p2_mask++;
-                        continue;
                     }
-
-                    double r_p2 = tmp_p2->second.particles.back().second;
-                    double center_dist = (tmp_p1->second.center_of_mass-tmp_p2->second.center_of_mass).Norm();
-
-                    if (center_dist < std::max(r_p1, r_p2)) {
-                        // one contains another, just merge
-                        tmp_p1->second.MergeAnotherPlanetesimal(tmp_p2->second, particle_list);
-                        r_p1 = tmp_p1->second.particles.back().second;
-                        mask[tmp_p2_mask].flip();
-                        peaks_to_be_deleted.push_back(tmp_p2->first);
-                    } else if (center_dist < (r_p1 + r_p2) && ds.planetesimal_list.IsGravitationallyBound(tmp_p1->second, tmp_p2->second)) {
-                        // they intersect and bound
-                        tmp_p1->second.MergeAnotherPlanetesimal(tmp_p2->second, particle_list);
-                        r_p1 = tmp_p1->second.particles.back().second;
-                        mask[tmp_p2_mask].flip();
-                        peaks_to_be_deleted.push_back(tmp_p2->first);
-                    }
-                    // we don't merge other cases
-                    tmp_p2++;
-                    tmp_p2_mask++;
                 }
             }
             tmp_p1++;
@@ -3003,6 +2992,7 @@ public:
         mask.clear();
 
         // put real peak indices into keys
+        // \todo: if this happens, I also need to change the potential_subpeak_indices
         std::vector<uint32_t> real_peak_indices;
         for (auto &it : ds.planetesimal_list.planetesimals) {
             uint32_t tmp_peak_id = it.first;
@@ -3035,6 +3025,7 @@ public:
         progIO->log_info << "Merging done, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
 
         // 5, remove unbound particles
+        // \todo: we should collect these unbound particles --> we may find some sub-clumps
         for (auto &it : ds.planetesimal_list.planetesimals) {
             it.second.RemoveUnboundParticles(particle_list);
             it.second.CalculateHillRadius();
@@ -3091,7 +3082,7 @@ public:
         peaks_to_be_deleted.resize(0);
         progIO->log_info << "Remove low&small peaks again, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
 
-        // Finally, remove those planetesimals that locate at ghost zones
+        // 9, remove those planetesimals that locate at ghost zones
         for (auto it : ds.planetesimal_list.planetesimals) {
             if (!it.second.center_of_mass.InRange(progIO->numerical_parameters.box_min, progIO->numerical_parameters.box_max)) {
                 peaks_to_be_deleted.push_back(it.first);
@@ -3103,7 +3094,6 @@ public:
         peaks_to_be_deleted.resize(0);
         progIO->log_info << "Erase ghost planetesimals, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
         ds.planetesimal_list.num_planetesimals = ds.planetesimal_list.planetesimals.size();
-
 
         // Before ending, output some info
         if (ds.planetesimal_list.num_planetesimals > 0) {
@@ -3117,18 +3107,13 @@ public:
                 return a + b.second;
             }) << " in code units; ";
         }
+        ds.planetesimal_list.OutputPlanetesimalsInfo(loop_count, ds.tree, ds.particle_set);
 
-        // RL: debug use
-        ds.planetesimal_list.OutputPlanetesimalsInfo(loop_count, ds.tree);
-        //*/
 
-        /* RL: debug use
-        std::ofstream one_clump;
-        one_clump.open("one_clump.txt");
-        for (auto it : ds.planetesimal_list.planetesimals.find(13397)->second.particles) {
-            one_clump << std::setprecision(16) << std::setw(24) << particle_list[it.first].pos[0] << std::setw(24) << particle_list[it.first].pos[1] << std::setw(24) << particle_list[it.first].pos[2] << std::setw(24) << particle_list[it.first].vel[0] << std::setw(24) << particle_list[it.first].vel[1] << std::setw(24) << particle_list[it.first].vel[2] << std::setw(24) << particle_list[it.first].mass << std::endl;
-        }
-        one_clump.close(); //*/
+        // \todo: think about small-passing-by-clumps --> they are very weakly-bound with the big one while embeded in it
+        // \todo: for the small-passing-by-clumps, I found the angles between their velocities and the center-of-mass velocity are fairly large, but are not the largest among all the particles. However, their |P_grav + E_k|/E_k are the lowest (between 0.2 to 0.3) among all the particles. This may be a hint to distinguish them.
+        // \todo: according to the definition of Hill Radius, for those small clumps with super dense core (multiple particles at the same location), their Hill Radii are in fact pretty large (~ cell length), which means more particles belong to such small clumps. And those particles may have only low densities and are excluded from the begining.
+
 
         progIO->log_info<< std::endl;
         progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
@@ -3355,9 +3340,9 @@ public:
         mpi->WriteSingleFile(mpi->result_files[mpi->file_pos[progIO->file_name.planetesimals_file]], progIO->out_content, __all_processors);
     }
 
-    /*! \fn void OutputPlanetesimalsInfo(int loop_count, BHtree<D> &tree)
+    /*! \fn void OutputPlanetesimalsInfo(int loop_count, BHtree<D> &tree, ParticleSet<D> &particle_set)
      *  \brief output the kinematic info of planetesimals */
-    void OutputPlanetesimalsInfo(int loop_count, BHtree<D> &tree) {
+    void OutputPlanetesimalsInfo(int loop_count, BHtree<D> &tree, ParticleSet<D> &particle_set) {
         std::ofstream file_planetesimals;
         std::ostringstream tmp_ss;
         tmp_ss << std::setprecision(3) << std::fixed << std::setw(7) << std::setfill('0') << progIO->physical_quantities[loop_count].time;
@@ -3370,8 +3355,31 @@ public:
         }
 
         file_planetesimals << std::setw(24) << "# center_of_mass[x]" << std::setw(24) << "center_of_mass[y]" << std::setw(24) << "center_of_mass[z]" << std::setw(10) << "peak_id" << std::setw(24) << "<-its_rho" << std::setw(10) << "Npar" << std::setw(24) << "total_mass" << std::setw(24) << "Hill_radius" << std::setw(24) << "max(dist2COM)" << std::setw(24) << "total_mass/volume_by_max_dist2COM" << std::endl;
+        for (auto peak : peaks_and_masses) {
+            auto it = planetesimals.find(peak.first);
+            file_planetesimals << std::setprecision(16) << std::setw(24) << it->second.center_of_mass[0] << std::setw(24) << it->second.center_of_mass[1] << std::setw(24) << it->second.center_of_mass[2] << std::setw(10) << it->first << std::setw(24) << tree.particle_list[it->first].new_density;
+            auto tmp_num_particles = it->second.indices.size();
+            for (auto item : it->second.indices) {
+                auto tmp_it = tree.sink_particle_indices.find(item);
+                if (tmp_it != tree.sink_particle_indices.end()) {
+                    tmp_num_particles += tmp_it->second.size()-1;
+                }
+            }
+            file_planetesimals << std::setw(10) << tmp_num_particles << std::setw(24) << it->second.total_mass << std::setw(24) << it->second.Hill_radius << std::setw(24) << it->second.particles.back().second << std::setw(24) << it->second.total_mass / (progIO->numerical_parameters.four_PI_over_three * pow(it->second.particles.back().second, 3)) << std::endl;
+        }
+        file_planetesimals.close(); //*/
+
+        // todo: after revealing sub-clumps, we need to output them hierarchically
+        std::ofstream file_parlist;
+        tmp_file_name = progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/'))+std::string("/parlist_")+std::to_string(loop_count)+std::string(".txt");
+        file_parlist.open(tmp_file_name);
+        if (!(file_parlist.is_open())) {
+            progIO->error_message << "Error: Failed to open file_parlist due to " << std::strerror(errno) << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        }
+
+        file_parlist << planetesimals.size() << std::endl; // (1), # of planetesimals
         for (auto it : planetesimals) {
-            file_planetesimals << std::setprecision(16) << std::setw(24) << it.second.center_of_mass[0] << std::setw(24) << it.second.center_of_mass[1] << std::setw(24) << it.second.center_of_mass[2] << std::setw(10) << it.first << std::setw(24) << tree.particle_list[it.first].new_density;
             auto tmp_num_particles = it.second.indices.size();
             for (auto item : it.second.indices) {
                 auto tmp_it = tree.sink_particle_indices.find(item);
@@ -3379,11 +3387,132 @@ public:
                     tmp_num_particles += tmp_it->second.size()-1;
                 }
             }
-            file_planetesimals << std::setw(10) << tmp_num_particles << std::setw(24) << it.second.total_mass << std::setw(24) << it.second.Hill_radius << std::setw(24) << it.second.particles.back().second << std::setw(24) << it.second.total_mass / (progIO->numerical_parameters.four_PI_over_three * pow(it.second.particles.back().second, 3)) << std::endl;
+            file_parlist << tmp_num_particles << std::endl; // (2) # of particles
+            for (auto item : it.second.indices) {
+                auto tmp_it = tree.sink_particle_indices.find(item);
+                if (tmp_it != tree.sink_particle_indices.end()) {
+                    for (auto parid : tmp_it->second) {
+                        file_parlist << particle_set[parid].id << std::endl;
+                    }
+                } else {
+                    file_parlist << particle_set[tree.particle_list[item].original_id].id << std::endl;
+                }
+            }
         }
-        file_planetesimals.close(); //*/
+        file_parlist.close();
+    }
 
-        // todo: output detailed particle list in the planetesimals for further analysis
+    void OutputSinglePlanetesimal(std::string file_name, uint32_t peak_id, typename BHtree<D>::InternalParticle *particle_list) {
+        std::ofstream file_single_clump;
+        auto search_it = planetesimals.find(peak_id);
+        if (search_it != planetesimals.end()) {
+            file_single_clump.open(file_name);
+            if (!(file_single_clump.is_open())) {
+                progIO->error_message << "Error: Failed to open file: " << file_name << ". But we proceed." << std::endl;
+                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+            }
+            for (auto it : search_it->second.particles) {
+                for (int i = 0; i != D; i++) {
+                    file_single_clump << std::setprecision(16) << std::setw(24) << particle_list[it.first].pos[i];
+                }
+                for (int i = 0; i != D; i++) {
+                    file_single_clump << std::setprecision(16) << std::setw(24) << particle_list[it.first].vel[i];
+                }
+                file_single_clump << std::setprecision(16) << std::setw(24) << particle_list[it.first].mass << std::endl;
+            }
+            file_single_clump.close();
+        }
+    }
+
+    void OutputParticles(std::string file_name, const std::vector<uint32_t> &id_list, const ParticleSet<D> &particle_set) {
+        std::ofstream file_particles;
+        file_particles.open(file_name);
+        if (!(file_particles.is_open())) {
+            progIO->error_message << "Error: Failed to open file: " << file_name << ". But we proceed. " << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        }
+
+        for (auto it : id_list) {
+            for (int i = 0; i != D; i++) {
+                file_particles << std::setprecision(16) << std::setw(24) << particle_set[it].pos[i];
+            }
+            for (int i = 0; i != D; i++) {
+                file_particles << std::setprecision(16) << std::setw(24) << particle_set[it].vel[i];
+            }
+            file_particles <<  std::setprecision(16) << std::setw(24) << progIO->numerical_parameters.mass_per_particle[particle_set[it].property_index] << std::endl;
+        }
+        file_particles.close();
+    }
+
+    /*! \fn template <class T> std::vector<uint32_t> SearchParticlesByPermanentID(const std::vector<uint32_t> &id_list, uint32_t peak_id, const DataSet<T, D> &ds)
+     *  \brief search particles in a planetesimal by their permanent ids in simulations and return their indices in ds.particle_set */
+    template <class T>
+    std::vector<uint32_t> SearchParticlesByPermanentID(const std::vector<uint32_t> &id_list, uint32_t peak_id, const DataSet<T, D> &ds) {
+        std::vector<uint32_t> search_results;
+        auto tmp_planetesimal = planetesimals.find(peak_id);
+        if (!std::is_sorted(id_list.begin(), id_list.end())) {
+            progIO->error_message << "Error: a sorted id_list is needed. SearchParticlesByPermanentID (peak_id = " << peak_id << ") aborted. " << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        }
+
+        if (tmp_planetesimal != planetesimals.end()) {
+            for (auto par : tmp_planetesimal->second.indices) {
+                if (ds.tree.particle_list[par].sink_flag) {
+                    auto sink_par = ds.tree.sink_particle_indices.find(par);
+                    std::vector<uint32_t> tmp_id_list;
+                    for (auto it : sink_par->second) {
+                        if (std::binary_search(id_list.begin(), id_list.end(), ds.particle_set[it].id)) {
+                            search_results.push_back(it);
+                        }
+                    }
+                } else {
+                    if (std::binary_search(id_list.begin(), id_list.end(), ds.particle_set[ds.tree.particle_list[par].original_id].id)) {
+                        search_results.push_back(ds.tree.particle_list[par].original_id);
+                    }
+                }
+            }
+        }
+        return search_results;
+    }
+
+    /*! \fn template <class T> std::vector<uint32_t> SearchSinkParticlesByPermanentID(const std::vector<uint32_t> &id_list, uint32_t peak_id, const DataSet<T, D> &ds)
+     *  \brief search sink particles in a planetesimal by all their permanent ids (including sub-particles) and return their indices ds.tree.particle_list
+     *  This function will find any sink particle in current snapshot that has intersections with id_list. */
+    template <class T>
+    std::vector<std::pair<uint32_t, std::vector<uint32_t>>> SearchSinkParticlesByPermanentID(const std::vector<uint32_t> &id_list, uint32_t peak_id, const DataSet<T, D> &ds) {
+        std::vector<std::pair<uint32_t, std::vector<uint32_t>>> search_results;
+        std::vector<uint32_t> intersect_vec;
+        auto tmp_planeteismal = planetesimals.find(peak_id);
+        if (!std::is_sorted(id_list.begin(), id_list.end())) {
+            progIO->error_message << "Error: a sorted id_list is needed. SearchSinkParticlesByPermanentID (peak_id = " << peak_id << ") aborted. " << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        }
+
+        if (tmp_planeteismal != planetesimals.end()) {
+            for (auto par : tmp_planeteismal->second.indices) {
+                if (ds.tree.particle_list[par].sink_flag) {
+                    auto sink_par = ds.tree.sink_particle_indices.find(par);
+                    std::vector<uint32_t> tmp_id_list;
+                    for (auto it : sink_par->second) {
+                        tmp_id_list.push_back(ds.particle_set[it].id);
+                    }
+                    std::sort(tmp_id_list.begin(), tmp_id_list.end());
+                    intersect_vec.resize(0);
+                    intersect_vec.resize(std::max(id_list.size(), tmp_id_list.size()));
+                    auto intersect_it = std::set_intersection(id_list.begin(), id_list.end(), tmp_id_list.begin(), tmp_id_list.end(), intersect_vec.begin());
+                    intersect_vec.resize(intersect_it - intersect_vec.begin());
+                    if (intersect_vec.size() > 0) {
+                        search_results.push_back(std::pair<uint32_t, std::vector<uint32_t>>(par, intersect_vec));
+                    }
+                }
+            }
+        }
+
+        std::sort(search_results.begin(), search_results.end(), [](std::pair<uint32_t, std::vector<uint32_t>> &a, std::pair<uint32_t, std::vector<uint32_t>> &b) {
+            return a.second.size() < b.second.size();
+        });
+        return search_results;
+
     }
 
 };
@@ -3420,8 +3549,6 @@ public:
     PlanetesimalList<D> planetesimal_list;
     
 };
-
-
 
 
 #endif /* tree_hpp */

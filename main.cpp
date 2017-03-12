@@ -68,8 +68,7 @@ int main(int argc, const char * argv[])
         if (progIO->flags.find_clumps_flag || progIO->flags.density_vs_scale_flag) {
             ds.particle_set.MakeGhostParticles(progIO->numerical_parameters);
             ds.tree.BuildTree(progIO->numerical_parameters, ds.particle_set);
-            
-            ds.tree.CheckTree(ds.tree.root, ds.tree.root_level, ds.tree.root_center, ds.tree.half_width);
+
             BasicAnalysesWithTree(ds, loop_count);
 
             /***** Step III-B, identity high density region and find planetesimals *****/
