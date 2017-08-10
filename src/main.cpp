@@ -14,7 +14,7 @@
 #include "analyses.hpp"
 
 /*****************************************************/
-/********** Definitions of Global Varialbes **********/
+/********** Definitions of Global Variables **********/
 /*****************************************************/
 
 /*! \var MPI_Wrapper *mpi
@@ -58,7 +58,7 @@ int main(int argc, const char * argv[])
         /***** Step III-A, read original data and perform basic analyses *****/
         timer[__tmp_used_timer].StartTimer();
         ds.particle_set.ReadLisFile(loop_count);
-        //ds.vtk_data.ReadVtkFile(loop_count);
+        //ds.vtk_data.ReadVtkFile(loop_count);  // currently only for my other analyses
         timer[__tmp_used_timer].StopTimer();
         progIO->out_content << "Reading loop_count (" << loop_count << ") cost " << timer[__tmp_used_timer].GiveTime() << " seconds\n";
         progIO->Output(std::cout, progIO->out_content, __more_output, __all_processors);

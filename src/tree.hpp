@@ -3369,9 +3369,11 @@ public:
         }
         file_planetesimals.close(); //*/
 
+        return ;
+
         // todo: after revealing sub-clumps, we need to output them hierarchically
         std::ofstream file_parlist;
-        tmp_file_name = progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/'))+std::string("/parlist_")+std::to_string(loop_count)+std::string(".txt");
+        tmp_file_name = progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/'))+std::string("/parlist_")+tmp_ss.str()+std::string(".txt");
         file_parlist.open(tmp_file_name);
         if (!(file_parlist.is_open())) {
             progIO->error_message << "Error: Failed to open file_parlist due to " << std::strerror(errno) << std::endl;

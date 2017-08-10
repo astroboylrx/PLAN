@@ -905,7 +905,7 @@ enum MPI_Level {
 };
 
 /*! \class IO_Flags
- *  \brief all possible flags used in executation */
+ *  \brief all possible flags used in execution */
 class IO_Flags {
 public:
     /*! \var int debug_flag
@@ -968,7 +968,7 @@ public:
     std::vector<PhysicalQuantities> physical_quantities;
     
     /*! \var IO_Flags flags
-     *  \brief all possible flags used in executation */
+     *  \brief all possible flags used in execution */
     IO_Flags flags;
     
     /*! \var std::ostringstream out_content

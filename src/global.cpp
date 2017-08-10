@@ -67,19 +67,19 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"Temp_Calculation", no_argument, &flags.tmp_calculation_flag, 1},
         {"Help", no_argument, &flags.help_flag, 1},
         // These options don't set a flag
-        {"num_cpus", required_argument, 0, 'c'},
-        {"data_dir", required_argument, 0, 'i'},
-        {"basename", required_argument, 0, 'b'},
-        {"postname", required_argument, 0, 'p'},
-        {"file_num", required_argument, 0, 'f'},
-        {"output", required_argument, 0, 'o'},
-        {"InputConst", required_argument, 0, 't'},
+        {"num_cpus", required_argument, nullptr, 'c'},
+        {"data_dir", required_argument, nullptr, 'i'},
+        {"basename", required_argument, nullptr, 'b'},
+        {"postname", required_argument, nullptr, 'p'},
+        {"file_num", required_argument, nullptr, 'f'},
+        {"output", required_argument, nullptr, 'o'},
+        {"InputConst", required_argument, nullptr, 't'},
 #ifdef SMR_ON
         {"level", required_argument, 0, 'l'},
         {"domain", required_argument, 0, 'd'},
 #endif // SMR_ON
         // End
-        {0,0,0,0}
+        {0,0, nullptr,0}
     };
     
     log_info << "Verifying command-line-input arguments: \n";
@@ -272,14 +272,14 @@ void Basic_IO_Operations::PrintUsage(const char *program_name)
     << " -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> --flags]\n"
     << "Example: ./plan -c 64 -i ./bin/ -b Par_Strat3d -p ds -f 170:227 -o result.txt --Verbose\n"
     << "[...] means optional arguments. Available flags: \n"
-    << "Use --Help to obatin this usage information\n"
-    << "Use --Verbose to obtain more output during executation\n"
-    << "Use --Debug to obtain all possbile output during executation\n"
-    << "Use --Combined to deal with combined lis files (from all processors\n"
+    << "Use --Help to obtain this usage information\n"
+    << "Use --Verbose to obtain more output during execution\n"
+    << "Use --Debug to obtain all possible output during execution\n"
+    << "Use --Combined to deal with combined lis files (from all processors)\n"
     << "Use --Find_Clumps to run clump finding functions\n"
     << "Use --Basic_Analyses to perform basic analyses, which will output max($\\rho_p$) and $H_p$\n"
-    << "Use --Density_Vs_Scale to calculate max($\\rho_p$) as a function of length scale"
-    << "Use --Temp_Calculation to do temporary calculations in TempCalculation()"
+    << "Use --Density_Vs_Scale to calculate max($\\rho_p$) as a function of length scales\n"
+    //<< "Use --Temp_Calculation to do temporary calculations in TempCalculation()\n"
     << "If you don't specify any flags, then --Find_Clumps will be turned on automatically.";
     out_content << std::endl;
     Output(std::cout, out_content, __normal_output, __master_only);
