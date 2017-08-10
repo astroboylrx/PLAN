@@ -10,6 +10,9 @@ if (${myhostname} STREQUAL "Rixins-MacBook-Pro.local")
     # include MacPorts directories in my own laptop
     target_include_directories(${PROJECT_NAME} PUBLIC /opt/local/include /opt/local/include/openmpi-mp)
 endif ()
+############################################################
+## Other users may add irregular header search paths here ##
+############################################################
 
 option(PARALLEL "Using parallel plan" OFF)
 if (PARALLEL)
