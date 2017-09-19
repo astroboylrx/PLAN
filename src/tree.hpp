@@ -1134,7 +1134,7 @@ public:
         } // if (shape_changed_flag)
 
         progIO->numerical_parameters.cell_length = spacing;
-        progIO->numerical_parameters.cell_volume = std::accumulate(spacing.data, spacing.data+D, 1, std::multiplies<double>());
+        progIO->numerical_parameters.cell_volume = std::accumulate(spacing.data, spacing.data+D, 1.0, std::multiplies<double>());
 
         // RL: tried to check time, but vtk and lis have different precisions on time info
         // RL: consider check the numerical_parameters.box_min/box_max with info from vtk files
@@ -2807,6 +2807,23 @@ public:
         return density;
     }
 
+    /*! \fn template <class T> void RemoveSmallMassAndLowPeak(DataSet<T, D> &ds)
+     *  \brief Remove those groups that only have small masses or have relatively low peak densities */
+    template <class T>
+    void RemoveSmallMassAndLowPeak(DataSet<T, D> &ds) {
+        std::vector<uint32_t> peaks_to_be_deleted;
+        
+        for (auto it : ds.planetesimal_list.planetesimals) {
+            if (it.second.total_mass < ds.planetesimal_list.clump_mass_threshold || particle_list[it.first].new_density < ds.planetesimal_list.peak_density_threshold) {
+                peaks_to_be_deleted.push_back(it.first);
+            }
+        }
+        for (auto it : peaks_to_be_deleted) {
+            ds.planetesimal_list.planetesimals.erase(it);
+        }
+        peaks_to_be_deleted.resize(0);
+    }
+
     /*! \fn template <class T, class F> void FindPlanetesimals(DataSet<T, D> &ds, F f, int loop_count)
      *  \brief find planetesimals in particle data
      *  \tparam F the function that used to calculate new particle density based on a given kernel
@@ -2823,7 +2840,10 @@ public:
 
         // Toomre Q ~ Omega^2 / PI / grav_constant / rho < 1 ==> rho_crit > Omega^2 / PI / grav_constant
         // so we are looking for regions/particles with at least rho_crit, for now we use 2 * rho_crit as a threshold
-        double density_threshold = std::pow(progIO->numerical_parameters.Omega, 2.) / progIO->numerical_parameters.PI / progIO->numerical_parameters.grav_constant * 2.; // = 160 for the fiducial run
+        ds.planetesimal_list.density_threshold = std::pow(progIO->numerical_parameters.Omega, 2.) / progIO->numerical_parameters.PI / progIO->numerical_parameters.grav_constant * 2.; // = 160 for the fiducial run
+        // and we are looking for clumps with certain mass_crit & peak_rho_crit
+        ds.planetesimal_list.clump_mass_threshold = ds.planetesimal_list.density_threshold / QuadraticSpline(sn::dvec(0)) * progIO->numerical_parameters.cell_volume; // at least enough mass to pass rho_crit
+        ds.planetesimal_list.peak_density_threshold = 3 * ds.planetesimal_list.density_threshold; // from HOP's experience (ref: https://www.cfa.harvard.edu/~deisenst/hop/hop_doc.html)
 
         // 1, Calculate the particle densities (only for particles with dpar > Omega^2/G)
         double radius_Kth_NN = 0.;
@@ -2845,7 +2865,7 @@ public:
         indices = new uint32_t[progIO->numerical_parameters.num_neighbors_to_hop];
         for (uint32_t i = 0; i != num_particles; i++) {
             particle_list[i].densest_neighbor_id = i;
-            if (particle_list[i].new_density < density_threshold) {
+            if (particle_list[i].new_density < ds.planetesimal_list.density_threshold) {
                 continue;
             }
             KNN_Search(particle_list[i].pos, progIO->numerical_parameters.num_neighbors_to_hop, radius_Kth_NN, indices);
@@ -2869,7 +2889,7 @@ public:
         std::ofstream file;
         file.open("dpar.txt");
         for (uint32_t i = 0; i != num_particles; i++) {
-            file << particle_list[i].new_density << " " << particle_list[i].densest_neighbor_id << std::endl;
+            file << i << " " << particle_list[i].new_density << " " << particle_list[i].densest_neighbor_id << std::endl;
         }
         file.close();
         //*/
@@ -2881,7 +2901,7 @@ public:
             if (!mask[i]) {
                 continue;
             }
-            if (particle_list[i].new_density < density_threshold) {
+            if (particle_list[i].new_density < ds.planetesimal_list.density_threshold) {
                 mask.flip(i);
                 particle_list[i].peak_id = num_particles; // signal to be ignored
                 continue;
@@ -2923,11 +2943,31 @@ public:
         for (auto &it : ds.planetesimal_list.planetesimals) {
             it.second.SortParticles(particle_list);
         }
+        
+        // With certain parameters, there will be A LOT clumps all over the computational domain. Hopping will also identify very loose associations, where particle densities are marginally higher than the threshold. Such associations are in fact sparse collections of a few particles. For efficiency, we remove them immediately.
+        RemoveSmallMassAndLowPeak(ds);
+        
         progIO->log_info << "Hopping to peaks done, naive peak amount = " << ds.planetesimal_list.planetesimals.size() << "; ";
 
+        /* RL: debug use -- print out particle groups' properties after hopping and before merging
+        std::ofstream tmp_file("old_peak_list.txt", std::ofstream::out);
+        if (!tmp_file.is_open()) {
+            std::cout << "Fail to open peak_list.txt" << std::endl;
+        }
+        tmp_file << "#" << std::setw(23) << "x" << std::setw(24) << "y" << std::setw(24) << "z" << std::setw(24) << "dis_max" << std::setw(24) << "Npar" << std::setw(24) << "R_1/10" <<std::endl;
+        tmp_file << std::scientific;
+        for (auto &it : ds.planetesimal_list.planetesimals) {
+            for (int i_dim = 0; i_dim != 3; i_dim++) {
+                tmp_file << std::setprecision(16) << std::setw(24) << it.second.center_of_mass[i_dim];
+            }
+            tmp_file << std::setprecision(16) << std::setw(24) << it.second.particles.back().second << std::setw(24) << it.second.particles.size() << std::setw(24) << it.second.inner_one10th_radius << std::setw(24) << it.second.outer_one10th_radius << std::endl;
+        }
+        tmp_file.close();
+        //*/
 
-        // RL: Originally, the next step should be find the boundary particles and catalog the highest density boundary found between each pair of groups. After that, the code determines whether each naive clumps are viable or unviable depending on a peak_threshold and then merge two viable groups if they touch with each other and their boundary density > merge_threshold. An unviable clump is merged to the viable group with which it shares the highest boundary density. At last, all particles whose density are less than a outer_threshold are excluded from groups.
-        // But here I found the naive peaks found so far already obviously stand out of the background in the form of individual clump-clusters. Thus, from here, I'm going to merge those naive clumps if: (a) one contains another smaller one; (b) one touches another one and they are gravitationally bound with the other. After that, we'll go through each outer particle in those naive planetesimals to check if they are gravitationally bound.
+        /* RL: Originally, the next step should be find the boundary particles and catalog the highest density boundary found between each pair of groups. After that, the code determines whether each naive clumps are viable or unviable depending on a peak_threshold and then merge two viable groups if they touch with each other and their boundary density > merge_threshold. An unviable clump is merged to the viable group with which it shares the highest boundary density. At last, all particles whose density are less than a outer_threshold are excluded from groups.
+         * But here I found the naive peaks found so far already obviously stand out of the background in the form of individual clump-clusters. Thus, from here, I'm going to merge those naive clumps if: (a) one contains another smaller one; (b) one touches another one and they are gravitationally bound with the other. After that, we'll go through each outer particle in those naive planetesimals to check if they are gravitationally bound.
+         */
 
         // 4, merge bound clumps
         // RL: the order of the iterations through an unordered_map is not guaranteed to be the same. So don't count on it. In the merging process, it could be "A" eats "B" or "B" eats "A", which depends on who come first. But it does not affect the final results.
@@ -2938,7 +2978,7 @@ public:
         auto tmp_p1 = ds.planetesimal_list.planetesimals.begin();
         auto tmp_p1_mask = 0;
         while (tmp_p1 != ds.planetesimal_list.planetesimals.end()) {
-            double r_p1 = tmp_p1->second.particles.back().second;
+            double r_p1 = tmp_p1->second.one10th_radius;
 
             if (mask[tmp_p1_mask]) {
 
@@ -2958,21 +2998,21 @@ public:
                             continue;
                         }
 
-                        double r_p2 = tmp_p2->second.particles.back().second;
+                        double r_p2 = tmp_p2->second.one10th_radius;
                         double center_dist = (tmp_p1->second.center_of_mass-tmp_p2->second.center_of_mass).Norm();
 
                         if (center_dist < std::max(r_p1, r_p2)) {
                             // one contains another, just merge
                             tmp_p1->second.MergeAnotherPlanetesimal(tmp_p2->second, particle_list);
                             merge_happened_flag = 1;
-                            r_p1 = tmp_p1->second.particles.back().second;
+                            r_p1 = tmp_p1->second.one10th_radius;
                             mask[tmp_p2_mask].flip();
                             peaks_to_be_deleted.push_back(tmp_p2->first);
                         } else if (center_dist < (r_p1 + r_p2) && ds.planetesimal_list.IsGravitationallyBound(tmp_p1->second, tmp_p2->second)) {
                             // they intersect and bound
                             tmp_p1->second.MergeAnotherPlanetesimal(tmp_p2->second, particle_list);
                             merge_happened_flag = 1;
-                            r_p1 = tmp_p1->second.particles.back().second;
+                            r_p1 = tmp_p1->second.one10th_radius;
                             mask[tmp_p2_mask].flip();
                             peaks_to_be_deleted.push_back(tmp_p2->first);
                         }
@@ -3033,18 +3073,7 @@ public:
         progIO->log_info << "Unbinding particles done. ";
 
         // 6, remove those groups that only have small masses or have relatively low peak densities
-        double clump_mass_threshold = density_threshold / QuadraticSpline(sn::dvec(0)) * progIO->numerical_parameters.cell_volume;
-        double peak_density_threshold = 3 * density_threshold; // from HOP's experience
-
-        for (auto it : ds.planetesimal_list.planetesimals) {
-            if (it.second.total_mass < clump_mass_threshold || particle_list[it.first].new_density < peak_density_threshold) {
-                peaks_to_be_deleted.push_back(it.first);
-            }
-        }
-        for (auto it : peaks_to_be_deleted) {
-            ds.planetesimal_list.planetesimals.erase(it);
-        }
-        peaks_to_be_deleted.resize(0);
+        RemoveSmallMassAndLowPeak(ds);
         progIO->log_info << "Remove low&small peaks, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
 
         // 7, even though we remove unbound particles, there are still plenty of particles that are marginally attached to our planetesimals (outside the naive Hill radius, which is in fact larger than the really radius since we include more mass). Let's try to remove them (thinking about removing puffed-envelopes).
@@ -3072,7 +3101,7 @@ public:
 
         // 8, again remove those groups that only have small masses relatively low peak densities
         for (auto it : ds.planetesimal_list.planetesimals) {
-            if (it.second.total_mass < clump_mass_threshold || particle_list[it.first].new_density < peak_density_threshold) {
+            if (it.second.total_mass < ds.planetesimal_list.clump_mass_threshold || particle_list[it.first].new_density < ds.planetesimal_list.peak_density_threshold) {
                 peaks_to_be_deleted.push_back(it.first);
             }
         }
@@ -3094,6 +3123,7 @@ public:
         peaks_to_be_deleted.resize(0);
         progIO->log_info << "Erase ghost planetesimals, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
         ds.planetesimal_list.num_planetesimals = ds.planetesimal_list.planetesimals.size();
+        progIO->out_content << "Finish clump finding for t = " << ds.particle_set.time << ", ";
 
         // Before ending, output some info
         if (ds.planetesimal_list.num_planetesimals > 0) {
@@ -3103,20 +3133,41 @@ public:
             std::sort(ds.planetesimal_list.peaks_and_masses.begin(), ds.planetesimal_list.peaks_and_masses.end(), [](const std::pair<uint32_t, double> &a, const std::pair<uint32_t, double> &b) {
                 return a.second < b.second;
             });
-            progIO->log_info << "Mp_max = " << ds.planetesimal_list.peaks_and_masses.back().second << ", Mp_tot = " << std::accumulate(ds.planetesimal_list.peaks_and_masses.begin(), ds.planetesimal_list.peaks_and_masses.end(), 0., [](const double &a, const std::pair<uint32_t, double> &b) {
+
+            if (progIO->numerical_parameters.num_peaks > 0 && ds.planetesimal_list.num_planetesimals > progIO->numerical_parameters.num_peaks) {
+                size_t num_to_be_deleted = ds.planetesimal_list.num_planetesimals - progIO->numerical_parameters.num_peaks;
+                for (auto it = ds.planetesimal_list.peaks_and_masses.begin(); it != ds.planetesimal_list.peaks_and_masses.begin() + num_to_be_deleted; it++) {
+                    peaks_to_be_deleted.push_back(it->first);
+                }
+                std::vector<typename decltype(ds.planetesimal_list.peaks_and_masses)::value_type>(
+                        ds.planetesimal_list.peaks_and_masses.begin() + num_to_be_deleted,
+                        ds.planetesimal_list.peaks_and_masses.end()).swap(ds.planetesimal_list.peaks_and_masses);
+                for (auto it : peaks_to_be_deleted) {
+                    ds.planetesimal_list.planetesimals.erase(it);
+                }
+                peaks_to_be_deleted.resize(0);
+                ds.planetesimal_list.num_planetesimals = ds.planetesimal_list.planetesimals.size();
+
+                progIO->log_info << "Remove low&small peaks once more due to the input max num_peaks limit, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
+            }
+
+            double Mp_tot = std::accumulate(ds.planetesimal_list.peaks_and_masses.begin(), ds.planetesimal_list.peaks_and_masses.end(), 0., [](const double &a, const std::pair<uint32_t, double> &b) {
                 return a + b.second;
-            }) << " in code units; ";
+            });
+            progIO->out_content << "found " << ds.planetesimal_list.num_planetesimals << " clumps; " << " Mp_max = " << ds.planetesimal_list.peaks_and_masses.back().second << ", Mp_tot = " << Mp_tot << "(" << std::fixed << Mp_tot/progIO->numerical_parameters.mass_total_code_units*100 << "%) in code units.";
+        } else {
+            progIO->out_content << "found zero clumps";
         }
         ds.planetesimal_list.OutputPlanetesimalsInfo(loop_count, ds.tree, ds.particle_set);
-
 
         // \todo: think about small-passing-by-clumps --> they are very weakly-bound with the big one while embeded in it
         // \todo: for the small-passing-by-clumps, I found the angles between their velocities and the center-of-mass velocity are fairly large, but are not the largest among all the particles. However, their |P_grav + E_k|/E_k are the lowest (between 0.2 to 0.3) among all the particles. This may be a hint to distinguish them.
         // \todo: according to the definition of Hill Radius, for those small clumps with super dense core (multiple particles at the same location), their Hill Radii are in fact pretty large (~ cell length), which means more particles belong to such small clumps. And those particles may have only low densities and are excluded from the begining.
 
-
-        progIO->log_info<< std::endl;
+        progIO->log_info << std::endl;
         progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+        progIO->out_content << std::endl;
+        progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
     }
     
 };
@@ -3161,6 +3212,29 @@ public:
      *  \brief pairs of particle indices and their distances to the center of mass */
     std::vector<std::pair<uint32_t, double>> particles;
 
+    /* RL: After the hopping step, we need a criterion to determine whether or not to merge two particle groups (since there are usually many hopping chains within one dense clump). Again, two groups will be merged if one totally contains the other or one intersects with the other and they are gravitationally bound. This method requires the knowledge of "radius." The naivest choice is the distance from the COM to the farthest particle, which works fine for the case where planetesimals form sparely. But in order to generalize this code to situations where planetesimals form closely, we now move to a new definition of radius, one tenth radius (see definitions below)
+     */
+    
+    /*! \var double outer_one10th_radius
+     *  \brief the radius of the outermost particle that has a density > 1/10 the peak density */
+    double outer_one10th_radius;
+    
+    /*! \var double inner_one10th_radius
+     *  \brief the radius of the innermost particle that has a density < 1/10 the peak density */
+    double inner_one10th_radius;
+    
+    /*! \var double one10th_radius
+     *  \brief the average radius = (inner_one10th_radius + outer_one10th_radius) / 2. */
+    double one10th_radius;
+    
+    /* RL: On the one hand, very-newly-formed clumps, early-stage-merging clumps, and clumps starting accreting smaller companions may deviate from spherical shapes a lot. This "inner_one10th_radius" will avoid over-estiamting their radii and prevent unnecessary "group-merging" during clump-finding. On the other hand, late-stage-mering clumps and clumps with tidally-disrupted companions/streams only deviate a little from spherical shapes. This "outer_one10th_radius" will identified them and their sub-structures as one individual clump and perform group-merging during clump-finding. Therefore, using the average radius "one10th_radius" enables this program to find planetesimals more accurately.
+     * RL: Note that outer_one10th_radius is not necessary larger than inner_one10th_radius (e.g., two adjacent indices but with outer_one10th_radius being the smaller one). Furthermore, one clump identified by (outer_)one10th_radius only may correspond to multiple clumps identified by inner_one10th_radius only, which may provide a good practice for categorizing sub-clumps.
+     */
+    
+    /*! \var double half_mass_radius
+     *  \brief the radius that contains half of the total mass */
+    double half_mass_radius;
+    
     /*! \var double Hill_radius
      *  \brief Hill radius */
     double Hill_radius;
@@ -3185,7 +3259,7 @@ public:
     }
 
     /*! \fn void SortParticles(typename BHtree<D>::InternalParticle *particle_list)
-     *  \brief sort the paritcle indices by their distances to the center of mass */
+     *  \brief sort the particle indices by their distances to the center of mass */
     void SortParticles(typename BHtree<D>::InternalParticle *particle_list) {
         CalculateKinematicProperties(particle_list);
         for (auto it : indices) {
@@ -3194,12 +3268,35 @@ public:
         std::sort(particles.begin(), particles.end(), [](const std::pair<uint32_t, double> &a, const std::pair<uint32_t, double> &b) {
             return a.second < b.second;
         });
-
+        
         auto tmp_it = indices.begin();
         for (auto it : particles) {
             *tmp_it = it.first;
             tmp_it++;
         }
+        
+        auto par_it = particles.begin();
+        auto par_rit = particles.rbegin();
+        auto tmp_one10th_peak_density = particle_list[peak_index].new_density / 10.;
+        
+        for (; par_it != particles.end(); ++par_it) {
+            if (particle_list[par_it->first].new_density < tmp_one10th_peak_density) {
+                break;
+            }
+        }
+        if (par_it != particles.end()) {
+            inner_one10th_radius = par_it->second;
+        } else {
+            inner_one10th_radius = particles.back().second;
+        }
+        for (; par_rit != particles.rend(); ++par_rit) {
+            if (particle_list[par_rit->first].new_density > tmp_one10th_peak_density) {
+                break;
+            }
+        }
+        outer_one10th_radius = par_rit->second;
+        one10th_radius = (inner_one10th_radius + outer_one10th_radius) / 2.;
+        
     }
 
     /*! \fn void MergeAnotherPlanetesimal(Planetesimal<D> carnivore, typename BHtree<D>::InternalParticle *particle_list)
@@ -3238,6 +3335,30 @@ public:
             *tmp_it = it.first;
             tmp_it++;
         }
+        
+        // recalculate one10th_radius
+        auto par_it = particles.begin();
+        auto par_rit = particles.rbegin();
+        auto tmp_one10th_peak_density = particle_list[peak_index].new_density / 10.;
+        
+        for (; par_it != particles.end(); ++par_it) {
+            if (particle_list[par_it->first].new_density < tmp_one10th_peak_density) {
+                break;
+            }
+        }
+        if (par_it != particles.end()) {
+            inner_one10th_radius = par_it->second;
+        } else {
+            inner_one10th_radius = particles.back().second;
+        }
+        for (; par_rit != particles.rend(); ++par_rit) {
+            if (particle_list[par_rit->first].new_density > tmp_one10th_peak_density) {
+                break;
+            }
+        }
+        outer_one10th_radius = par_rit->second;
+        one10th_radius = (inner_one10th_radius + outer_one10th_radius) / 2.;
+        
     }
 
     /*! \fn void RemoveUnboundParticles(typename BHtree<D>::InternalParticle *particle_list)
@@ -3295,6 +3416,18 @@ public:
      *  \breif the number of planetesimals found */
     unsigned long num_planetesimals {0};
 
+    /*! \var double density_threshold
+     *  \brief the density criterion for choosing particles (~ rho_crit for outer rims of planetesimals) */
+    double density_threshold;
+
+    /*! \var double clump_mass_threshold
+     *  \brief the mass criterion for removing weak clumps */
+    double clump_mass_threshold;
+
+    /*! \var double peak_density_threshold
+     *  \brief the density criterion for peak densities of planetesimals (rho_crit for the particle with the highest density) */
+    double peak_density_threshold;
+
     /*! \var std::vector<std::pair<uint32_t, double>> peaks_and_masses
      *  \brief a ordered vector of pairs recording the peak_indices (key to the map below) and masses */
     std::vector<std::pair<uint32_t, double>> peaks_and_masses;
@@ -3346,7 +3479,13 @@ public:
         std::ofstream file_planetesimals;
         std::ostringstream tmp_ss;
         tmp_ss << std::setprecision(3) << std::fixed << std::setw(7) << std::setfill('0') << progIO->physical_quantities[loop_count].time;
-        std::string tmp_file_name = progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/'))+std::string("/peaks_at_")+tmp_ss.str()+std::string(".txt");
+        std::string tmp_file_name;
+        if (progIO->file_name.output_file_path.find_last_of('/') != std::string::npos) {
+            tmp_file_name = progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/')) + std::string("/peaks_at_") + tmp_ss.str() + std::string(".txt");
+        } else {
+            // operates under current directory
+            tmp_file_name = std::string("peaks_at_") + tmp_ss.str() + std::string(".txt");
+        }
 
         file_planetesimals.open(tmp_file_name, std::ofstream::out);
         if (!(file_planetesimals.is_open())) {

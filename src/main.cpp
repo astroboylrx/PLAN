@@ -76,6 +76,10 @@ int main(int argc, const char * argv[])
             ds.planetesimal_list.WriteBasicResults(loop_count);
 
         } // if (progIO->flags.find_clumps_flag)
+
+        if (progIO->flags.tmp_calculation_flag) {
+            TempCalculation(ds, loop_count);
+        }
         
     }
 

@@ -32,9 +32,102 @@ void NumericalParameters::CalculateNewParameters()
     for (int i = 0; i != dim; i++) {
         max_half_width = std::max(max_half_width, box_half_width[i]);
     }
+
+    cell_length = box_length / box_resolution;
+    // N.B., if "1" is given to std::accumulate() as the init, then implicit conversion happens! Use 1.0 instead.
+    cell_volume = std::accumulate(cell_length.data, cell_length.data+dim, 1.0, std::multiplies<double>());
+    mass_total_code_units = std::sqrt(2*PI) * box_length[0] * box_length[1] * solid_to_gas_ratio;
+    G_tilde = four_PI_G / Omega / Omega;
+    mass_physical = (G_tilde / 0.1) * 1.3e24;
+    grav_constant = four_PI_G / four_PI;
     shear_speed = q * Omega * box_length[0];
+
 }
 
+/*! \fn void ReadNumericalParameters(std::string filename)
+ *  \brief read numerical parameters from file */
+void NumericalParameters::ReadNumericalParameters(std::string filename)
+{
+
+    // it's such a small configuration file
+    // to reduce the complexity, I'll just let each processor read it (without diff MPI_ON/OFF)
+
+    std::ifstream input_const_file (filename, std::ifstream::in);
+    if (!input_const_file.is_open()) {
+        progIO->error_message << "Error: Failed to open file " << filename << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        exit(3); // cannot open file
+    }
+
+    std::string input_str_line;
+    while (input_const_file && std::getline(input_const_file, input_str_line)) {
+
+        // ignore comments
+        if (input_str_line[0] == '#') {
+            continue;
+        }
+        // ignore Athena input file's block in case 'copy-and-paste'
+        if (input_str_line[0] == '<') {
+            continue;
+        }
+
+        // remove tailing comments
+        size_t pos = input_str_line.find_first_of('#');
+        input_str_line = input_str_line.substr(0, pos);
+
+        // break down to name and value and trim the leading and tailing whitespaces
+        pos = input_str_line.find_first_of('=');
+        std::string name = input_str_line.substr(0, pos);
+        boost::algorithm::trim(name);
+        std::string value = input_str_line.substr(pos+1);
+        boost::algorithm::trim(value);
+
+        if (name == "something_not_a_number_but_a_string") {
+            ; // store strings into specific variables
+        } else {
+            size_t idx;
+            input_paras.emplace(name, std::stod(value, &idx));
+            // if insertion happens, then return_value.second is true
+        }
+    }
+
+    auto search = input_paras.find("Z");
+    if (search != input_paras.end()) {
+        progIO->numerical_parameters.solid_to_gas_ratio = search->second;
+    }
+
+    for (int i = 1; i != dim+1; i++) {
+        std::string tmp_str = "Nx";
+        tmp_str += std::to_string(i);
+        search = input_paras.find(tmp_str);
+        if (search != input_paras.end()) {
+            progIO->numerical_parameters.box_resolution[i-1] = static_cast<unsigned int>(search->second);
+        }
+    }
+    search = input_paras.find("four_pi_G_par");
+    if (search != input_paras.end()) {
+        progIO->numerical_parameters.four_PI_G = search->second;
+    }
+    search = input_paras.find("num_peaks");
+    if (search != input_paras.end()) {
+        progIO->numerical_parameters.num_peaks = static_cast<unsigned int>(search->second);
+    }
+    search = input_paras.find("num_peak"); // in case it is not plural
+    if (search != input_paras.end()) {
+        progIO->numerical_parameters.num_peaks = static_cast<unsigned int>(search->second);
+    }
+
+    CalculateNewParameters();
+
+    progIO->log_info << "Reading input numerical parameters:" << std::endl;
+    progIO->log_info << "Solid to gas ratio (Z) = " << solid_to_gas_ratio << ";" << std::endl;
+    progIO->log_info << "Resolution Nx = [";
+    std::copy(box_resolution.data, box_resolution.data+dim, std::ostream_iterator<unsigned int>(progIO->log_info, ", "));
+    progIO->log_info << "];" << std::endl;
+    progIO->log_info << "four_pi_G_par = " << four_PI_G << ";" << std::endl;
+    progIO->Output(std::clog, progIO->log_info, __more_output, __master_only);
+    progIO->PrintStars(std::clog, __more_output);
+}
 
 
 /*****************************************/
@@ -72,8 +165,8 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"basename", required_argument, nullptr, 'b'},
         {"postname", required_argument, nullptr, 'p'},
         {"file_num", required_argument, nullptr, 'f'},
-        {"output", required_argument, nullptr, 'o'},
-        {"InputConst", required_argument, nullptr, 't'},
+        {"out_file", required_argument, nullptr, 'o'},
+        {"in_const", required_argument, nullptr, 't'},
 #ifdef SMR_ON
         {"level", required_argument, 0, 'l'},
         {"domain", required_argument, 0, 'd'},
@@ -241,7 +334,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         }
         
         // if no serious flags, set find_clumps_flag to 1
-        if (!flags.find_clumps_flag && !flags.basic_analyses_flag && !flags.density_vs_scale_flag) {
+        if (!flags.find_clumps_flag && !flags.basic_analyses_flag && !flags.density_vs_scale_flag && !flags.tmp_calculation_flag) {
             flags.find_clumps_flag = 1;
         }
         
@@ -260,6 +353,9 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
     
     physical_quantities.resize(num_files);
     GenerateFilenames();
+    if (!file_name.input_const_path.empty()) {
+        progIO->numerical_parameters.ReadNumericalParameters(file_name.input_const_path);
+    }
     
     return 0;
 }
@@ -270,7 +366,7 @@ void Basic_IO_Operations::PrintUsage(const char *program_name)
 {
     out_content << "USAGE: \n" << program_name
     << " -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> --flags]\n"
-    << "Example: ./plan -c 64 -i ./bin/ -b Par_Strat3d -p ds -f 170:227 -o result.txt --Verbose\n"
+    << "Example: ./plan -c 64 -i ./bin/ -b Par_Strat3d -p ds -f 170:227 -o result.txt -t plan_input.txt --Verbose --Find_Clumps\n"
     << "[...] means optional arguments. Available flags: \n"
     << "Use --Help to obtain this usage information\n"
     << "Use --Verbose to obtain more output during execution\n"
@@ -279,7 +375,7 @@ void Basic_IO_Operations::PrintUsage(const char *program_name)
     << "Use --Find_Clumps to run clump finding functions\n"
     << "Use --Basic_Analyses to perform basic analyses, which will output max($\\rho_p$) and $H_p$\n"
     << "Use --Density_Vs_Scale to calculate max($\\rho_p$) as a function of length scales\n"
-    //<< "Use --Temp_Calculation to do temporary calculations in TempCalculation()\n"
+    << "Use --Temp_Calculation to do temporary calculations in TempCalculation()\n"
     << "If you don't specify any flags, then --Find_Clumps will be turned on automatically.";
     out_content << std::endl;
     Output(std::cout, out_content, __normal_output, __master_only);
@@ -373,7 +469,7 @@ void Basic_IO_Operations::GenerateFilenames()
             }
         }
     }
-    
+
     file_name.max_rhop_vs_scale_file = file_name.output_file_path.substr(0, file_name.output_file_path.find_last_of('.'))+"_RMPL.txt";
     file_name.mean_sigma_file = file_name.output_file_path.substr(0, file_name.output_file_path.find_last_of('.'))+"_MeanSigma.txt";
     file_name.planetesimals_file = file_name.output_file_path.substr(0, file_name.output_file_path.find_last_of('.'))+"_planetesimals.txt";
@@ -528,15 +624,27 @@ void MPI_Wrapper::OpenFile(std::string file_name)
     offset[result_files.at(file_pos[file_name])] = 0;
     header_offset[result_files.at(file_pos[file_name])] = 0;
 #else // MPI_ON
-    
+
+#if defined(__GNUC__) && (__GNUC__ < 5) && (!__clang__)
+    result_files.push_back(new std::ofstream(file_name.c_str(), std::ofstream::out));
+    file_pos[file_name] = result_files.size() - 1;
+
+    if (!(*result_files.at(file_pos[file_name])).is_open()) {
+        progIO->error_message << "Error: Failed to open file " << file_name << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        exit(3); // cannot open file
+    }
+#else
     result_files.push_back(std::ofstream(file_name.c_str(), std::ofstream::out));
     file_pos[file_name] = result_files.size() - 1;
-    
+
     if (!(result_files.at(file_pos[file_name])).is_open()) {
         progIO->error_message << "Error: Failed to open file " << file_name << std::endl;
         progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
         exit(3); // cannot open file
     }
+#endif
+
 #endif // MPI_ON
 }
 
@@ -572,7 +680,13 @@ void MPI_Wrapper::WriteSingleFile(file_obj &__file, std::ostringstream &content,
         MPI_File_sync(__file);
     }
 #else // MPI_ON
+
+#if defined(__GNUC__) && (__GNUC__ < 5) && (!__clang__)
+    (*__file) << content.str();
+#else
     __file << content.str();
+#endif
+
 #endif // MPI_ON
     progIO->Reset(content);
 }
@@ -585,7 +699,13 @@ void MPI_Wrapper::CloseFile(file_obj &__file)
     //MPI_File_sync(__file);
     MPI_File_close(&__file);
 #else // MPI_ON
+
+#if defined(__GNUC__) && (__GNUC__ < 5) && (!__clang__)
+    (*__file).close();
+#else
     __file.close();
+#endif
+
 #endif // MPI_ON
 }
 

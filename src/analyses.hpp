@@ -149,10 +149,6 @@ void BasicAnalyses(DataSet<T, D> &ds, int loop_count)
         }
     } // if (progIO->flags.basic_analyses_flag)
 
-    if (progIO->flags.tmp_calculation_flag) {
-
-    }
-
 }
 
 /*! \functor template <int D, int d, class Compare, typename std::enable_if<bool(D>d), int>::type = 0> struct CompareParticle 
@@ -359,5 +355,32 @@ void MinDistanceBetweenParticles(DataSet<T, D> &ds, int loop_count)
     progIO->log_info << "loop_count = " << loop_count << ", min_distance_between_particles in data = " << min_distance << std::endl;
     progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
 }
+
+template <class T, int D>
+void TempCalculation(DataSet<T, D> &ds, int loop_count)
+{
+    // RL: debug use, output simple POINT3D vtk file for ParaView to visualize
+    std::ofstream file_lis2vtk;
+
+    file_lis2vtk.open("/Users/rixin/Downloads/test_old.vtk", std::ofstream::out);
+    if (!file_lis2vtk.is_open()) {
+        std::cout << "Failed to open test.vtk" << std::endl;
+        return;
+    }
+
+    file_lis2vtk << "# vtk DataFile Version 3.0\n";
+    file_lis2vtk << "test vtk file from t=45.8" << "\n";
+    file_lis2vtk << "ASCII\n";
+    file_lis2vtk << "DATASET UNSTRUCTURED_POINTS\n";
+    file_lis2vtk << "POINTS " << ds.particle_set.num_particles << " float\n";
+
+    for (auto i = 0; i != ds.particle_set.num_particles; i++) {
+        if (ds.particle_set[i].pos[0] > 2e-2 && ds.particle_set[i].pos[0] < 3e-2 && ds.particle_set[i].pos[1] > 7.5e-2 && ds.particle_set[i].pos[1] < 8.5e-2 && ds.particle_set[i].pos[2] > -1e-2 && ds.particle_set[i].pos[2] < 1e-2)
+        file_lis2vtk << ds.particle_set[i].pos[0] << " " << ds.particle_set[i].pos[1] << " " << ds.particle_set[i].pos[2] << "\n";
+    }
+    file_lis2vtk.close();
+    //*/
+    
+};
 
 #endif /* analyses_hpp */

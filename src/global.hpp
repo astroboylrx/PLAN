@@ -43,6 +43,7 @@
 #include "boost/endian/conversion.hpp"  // Boost Endian library
 #include "boost/multi_array.hpp"        // Boost MultiArray library
 #include "boost/dynamic_bitset.hpp"     // Boost Dynamic Bitset library
+#include "boost/algorithm/string/trim.hpp"
 #include <getopt.h>
 #include <unistd.h>
 
@@ -661,43 +662,52 @@ constexpr int dim {3};
 class NumericalParameters {
 private:
     
-public:    
-    /*! \var SmallVec<double, dim> box_center {SmallVec<double, dim>(0.0)}
-     *  \brief default center position of the box */
-    SmallVec<double, dim> box_center {SmallVec<double, dim>(0.0)};
-    
-    /*! \var SmallVec<double, dim> box_length {SmallVec<double, dim>(0.2)}
-     *  \brief default side length of the box */
-    SmallVec<double, dim> box_length {SmallVec<double, dim>(0.2)};
-    
-    /*! \var SmallVec<double, dim> box_min {SmallVec<double, dim>(-0.1)}
-     *  \brief default minimum coordinates for the box */
-    SmallVec<double, dim> box_min {SmallVec<double, dim>(-0.1)};
-    
-    /*! \var SmallVec<double, dim> box_max {SmallVec<double, dim>(0.1)}
-     *  \brief default maximum coordinates for the box */
-    SmallVec<double, dim> box_max {SmallVec<double, dim>(0.1)};
-    
-    /*! \var SmallVec<double, dim> box_half_width {SmallVec<double, dim>(0.1)}
-     *  \brief half the default box side length */
-    SmallVec<double, dim> box_half_width {SmallVec<double, dim>(0.1)};
-    
-    /*! \var SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.003125)}
-     *  \brief the default cell side length */
-    SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.003125/2.)};
+public:
 
-    /*! \var double cell_volume
-     *  \brief the default cell volume */
-    double cell_volume {0.003125*0.003125*0.003125/8.};
-    
+    /***** The following parameters can be retrieved from *.lis files *****/
+
+    /*! \var SmallVec<double, dim> box_center {SmallVec<double, dim>(0.0)}
+     *  \brief center position of the box, default (0, 0, 0) */
+    SmallVec<double, dim> box_center {SmallVec<double, dim>(0.0)};
+
+    /*! \var SmallVec<double, dim> box_length {SmallVec<double, dim>(0.2)}
+     *  \brief side length of the box, default (0.2, 0.2, 0.2) */
+    SmallVec<double, dim> box_length {SmallVec<double, dim>(0.2)};
+
+    /*! \var SmallVec<double, dim> box_min {SmallVec<double, dim>(-0.1)}
+     *  \brief minimum coordinates for the box, default (-0.1, -0.1, -0.1) */
+    SmallVec<double, dim> box_min {SmallVec<double, dim>(-0.1)};
+
+    /*! \var SmallVec<double, dim> box_max {SmallVec<double, dim>(0.1)}
+     *  \brief maximum coordinates for the box, default (0.1, 0.1, 0.1) */
+    SmallVec<double, dim> box_max {SmallVec<double, dim>(0.1)};
+
+    /*! \var SmallVec<double, dim> box_half_width {SmallVec<double, dim>(0.1)}
+     *  \brief half the box side length, default (0.1, 0.1, 0.1) */
+    SmallVec<double, dim> box_half_width {SmallVec<double, dim>(0.1)};
+
     /*! \var double max_half_width
      *  \brief maximum half width of box
      *  This is trick for building tree for non-cubic box. But later we can implement tree that use exact half width */
     double max_half_width {0.1};
+
+    /***** The following parameters need input information and/or derivation *****/
+
+    /*! \var SmallVec<unsigned int, dim> Nx {SmallVec<unsigned int, dim>(128)}
+     *  \brief box resolution, default (128, 128, 128) */
+    SmallVec<unsigned int, dim> box_resolution {SmallVec<unsigned int, dim>(128)};
     
+    /*! \var SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.0015625)}
+     *  \brief cell side length, default (0.0015625, 0.0015625, 0.0015625) */
+    SmallVec<double, dim> cell_length {SmallVec<double, dim>(0.0015625)};
+
+    /*! \var double cell_volume
+     *  \brief cell volume, default 0.0015625^3 */
+    double cell_volume {0.0015625*0.0015625*0.0015625};
+
     /*! \var double ghost_zone_width {0.025}
      *  \brief width of the ghost zone
-     *  Since planetesimal's size usually < 0.025H, so we adopt this figure. */
+     *  Since planetesimal's size usually < 0.025H, we adopt this number. A smaller number may be chosen. */
     double ghost_zone_width {0.025};
     
     /*! \var double q
@@ -720,13 +730,9 @@ public:
      *  \brief mass of one particle for each type */
     std::vector<double> mass_per_particle; // {std::vector<double>(1, 03.82481121006927567e-9)};
 
-    /*! \var const double mass_ceres
-     *  \brief the mass of asteroid Ceres (in kg) */
-    const double mass_ceres = 9.0e20;
-
     /*! \var double mass_total_code_units
      *  \brief total particle mass in code unit */
-    double mass_total_code_units {0.002};
+    double mass_total_code_units {0.0020053};
 
     /*! \var const double PI
      *  \brief the constant PI */
@@ -748,9 +754,13 @@ public:
      *  \brief the code unit indicating the strength of self-gravity */
     double G_tilde {four_PI_G / Omega / Omega}; // * rho_0 ?
 
+    /*! \var const double mass_ceres
+     *  \brief the mass of asteroid Ceres (in kg) */
+    const double mass_ceres = 9.4e20;
+
     /*! \var double mass_physical
      *  \brief the physical mass in the box assuming 3 AU and MMSN (in kg) */
-    double mass_physical {(G_tilde/0.1)*1.3e24}; // For G=0.1, M_0 = rho_0*H^3 = 1.3e24
+    double mass_physical {(G_tilde/0.1)*1.3e24}; // For G=0.1, r=3AU, M_0 = rho_0*H^3 = 1.3e24
 
     /*! \var double grav_constant
      *  \brief the gravitational constant in code unit */
@@ -768,6 +778,14 @@ public:
      *  \brief how many neighbors to search while looking for the densest neighbor */
     unsigned int num_neighbors_to_hop {32};
 
+    /*! \var unsigned int num_peaks
+     *  \brief the maximum number of clumps/peaks to OUTPUT */
+    unsigned int num_peaks {200};
+
+    /*! \var std::unordered_map<std::string, double> input_paras
+     *  \brief take input and serve as dictionary for single value parameters */
+    std::unordered_map<std::string, double> input_paras;
+
     /*! \fn NumericalParameters()
      *  \brief constructor */
     NumericalParameters();
@@ -777,8 +795,7 @@ public:
     void CalculateNewParameters();
     
     /*! \fn void ReadNumericalParameters(std::string filename)
-     *  \brief read numerical parameters from file
-     *  \todo maybe we could support reading numerical parameters from Athena input files */
+     *  \brief read numerical parameters from Athena input file */
     void ReadNumericalParameters(std::string filename);
     
 };
@@ -1074,9 +1091,26 @@ public:
     int loop_begin, loop_end, loop_step;
     
 #ifndef MPI_ON
+
+#if defined(__GNUC__) && (__GNUC__ < 5) && (!__clang__)
+    /* RL: std::ofstream should be move constructable but there is no move constructor declared before GCC 5.1
+     * Thus, we use pointers to compromise this bug here.
+     * refer to https://stackoverflow.com/questions/28775673/why-cant-i-move-stdofstream
+     *      and https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54316
+     *
+     * For Clang users, it should be fine if
+     *     Apple LLVM version > 6.0 or LLVM version > 3.5
+     * Since Mac OS uses clang as default, __clang__ = true(1)
+     */
+
+    /*! \alias using file_obj = std::ofstream *
+     *  \brief define a type for opening files */
+    using file_obj = std::ofstream *;
+#else
     /*! \alias using file_obj = std::ofstream
      *  \brief define a type for opening files */
     using file_obj = std::ofstream;
+#endif
 
 #else // MPI_ON
     /*! \var MPI_Comm world

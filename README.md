@@ -7,7 +7,8 @@ CMake is needed to generate a Makefile and compile this program. Boost library i
 ```bash
 ➜  PLAN $ ls
 CMakeLists.txt README.md      src
-➜  PLAN $ cmake .
+➜  PLAN $ mkdir build; cd ./build
+➜  build $ cmake ..
 -- The C compiler identification is AppleClang 8.1.0.8020042
 -- The CXX compiler identification is AppleClang 8.1.0.8020042
 -- Check for working C compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc
@@ -30,7 +31,7 @@ For parallel build, run cmake with -DPARALLEL=ON
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /Users/rixin/PLAN
-➜  PLAN $ make -j 4
+➜  build $ make -j 4
 Scanning dependencies of target plan
 [ 80%] Building CXX object CMakeFiles/plan.dir/src/tree.cpp.o
 [ 80%] Building CXX object CMakeFiles/plan.dir/src/global.cpp.o
@@ -38,6 +39,8 @@ Scanning dependencies of target plan
 [ 80%] Building CXX object CMakeFiles/plan.dir/src/main.cpp.o
 [100%] Linking CXX executable plan
 [100%] Built target plan
+➜  build $ ls
+CMakeCache.txt  CMakeFiles  cmake_install.cmake  Makefile  plan
 ```
 
 Specify the option, "PARALLEL", to build parallel program (MPI library is required).
@@ -45,7 +48,8 @@ Specify the option, "PARALLEL", to build parallel program (MPI library is requir
 ```bash
 ➜  PLAN $ ls
 CMakeLists.txt README.md      src
-➜  PLAN $ cmake -DPARALLEL=ON .
+➜  PLAN $ mkdir build; cd ./build
+➜  build $ cmake -DPARALLEL=ON ..
 -- The C compiler identification is AppleClang 8.1.0.8020042
 -- The CXX compiler identification is AppleClang 8.1.0.8020042
 -- Check for working C compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc
@@ -69,7 +73,7 @@ Generating Makefile for parallel program
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /Users/rixin/PLAN
-➜  PLAN $ make -j 4
+➜  build $ make -j 4
 Scanning dependencies of target plan
 [ 40%] Building CXX object CMakeFiles/plan.dir/src/global.cpp.o
 [ 40%] Building CXX object CMakeFiles/plan.dir/src/tree.cpp.o
@@ -77,6 +81,10 @@ Scanning dependencies of target plan
 [ 80%] Building CXX object CMakeFiles/plan.dir/src/main.cpp.o
 [100%] Linking CXX executable plan
 [100%] Built target plan
+➜  build $ ls
+CMakeCache.txt  CMakeFiles  cmake_install.cmake  Makefile  plan
 ```
+
+To clean CMake results and cache, just delete the `build` directory.
 
 
