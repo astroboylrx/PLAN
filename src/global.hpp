@@ -715,8 +715,16 @@ public:
     double q {1.5};
     
     /*! \var double Omega
-     *  \brief time unit */
+     *  \brief inverse time unit */
     double Omega {1.0};
+
+    /*! \var double Omega_squared
+     *  \brief Omega^2 */
+    double Omega_squared {Omega*Omega};
+
+    /*! \var double rho_g0
+     *  \brief density unit, midplane gas density */
+    double rho_g0 {1.0};
 
     /*! \var double solid_to_gas_ratio
      *  \brief solid-to-gas ratio, usually 0.02 */
@@ -752,7 +760,7 @@ public:
 
     /*! \var double G_tilde
      *  \brief the code unit indicating the strength of self-gravity */
-    double G_tilde {four_PI_G / Omega / Omega}; // * rho_0 ?
+    double G_tilde {four_PI_G * rho_g0 / Omega / Omega};
 
     /*! \var const double mass_ceres
      *  \brief the mass of asteroid Ceres (in kg) */
@@ -780,7 +788,15 @@ public:
 
     /*! \var unsigned int num_peaks
      *  \brief the maximum number of clumps/peaks to OUTPUT */
-    unsigned int num_peaks {200};
+    unsigned int num_peaks {0};
+
+    /*! \var double min_trusted_mass_code_unit
+     *  \brief the minimum mass of a clump/peak to OUTPUT, determined by R_Hill = cell_length
+     *  The Hill Radius is defined as R_Hill^3 = G Mass / (3 * Omega^2), where G = four_PI_G / four_PI.
+     *  Substitute dx into R_Hill, we have: Mass_min / (rho_g0 H^3) = 3 (dx/H)^3 (Omega^2/(rho_g0 G)).
+     *  For the fiducial run with 128^3 cells in (0.2H)^3 box, Mass_min = 2.87621e-6, i.e., 0.1434% of total mass.
+     *  Such a Mass_min corresponds to ~24 particles for the subsample of 16384 single-species particles. */
+    double min_trusted_mass_code_unit {2.87621e-6};
 
     /*! \var std::unordered_map<std::string, double> input_paras
      *  \brief take input and serve as dictionary for single value parameters */
@@ -1184,10 +1200,6 @@ public:
      *  \brief all processor write into a file, use with cautions -> read the assumptions in descriptions
      *  When MPI_ON is on, this function assumes that you only write file header if specifying __master_only, and it assumes that every processor are writing the same amout of chunk into the file every time */
     void WriteSingleFile(file_obj &__file, std::ostringstream &content, const MPI_Level &mpi_level);
-    
-    /*! \fn void WriteItsOwnFile(file_obj &__file, std::ostringstream &content)
-     *  \brief all processor write to its own file */
-    void WriteItsOwnFile(file_obj &__file, std::ostringstream &content);
     
     /*! \fn void CloseFile(file_obj &__file)
      *  \brief close the file */

@@ -1187,6 +1187,9 @@ public:
         vel = rhs.vel;
         property_index = rhs.property_index;
         density  = rhs.density;
+        id_in_run = rhs.id_in_run;
+        cpu_id = rhs.cpu_id;
+        id = rhs.id;
         return *this;
     }
 };
@@ -1937,6 +1940,10 @@ public:
         /*! \var bool sink_flag
          *  \brief if this is a sink particle, then "True"; else "False" */
         bool sink_flag {false};
+
+        /*! \var bool in_clump_flag
+         *  \brief if this particle already belongs to a clump, then "True"; else "False" */
+        bool in_clump_flag {false};
     };
 
     /*! \var std::unordered_map<uint32_t, std::vector<uint32_t>> sink_particles
@@ -2277,7 +2284,7 @@ public:
     
     /*! \fn void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set)
      *  \brief build tree from particle data */
-    void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set) { // double underscore here is to avoid confusion with all sorts of members
+    void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set, bool quiet=false) { // double underscore here is to avoid confusion with all sorts of members
         Reset();
         half_width = paras.max_half_width + paras.ghost_zone_width;
         root_center = paras.box_center;
@@ -2375,7 +2382,11 @@ public:
             })->second.size() << " super particles. ";
         }
         progIO->log_info << std::endl;
-        progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+        if (quiet) {
+            progIO->Reset(progIO->log_info);
+        } else {
+            progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+        }
     }
     
     /*! \fn bool Within(const dvec &__pos, const dvec &node_center, const double __half_width)
@@ -2674,9 +2685,9 @@ public:
         count = 0;
         RecursiveBallSearch(__center, root, radius, indices, count);
         // convert morton key to original particle id (optional step, only useful while interacting with outsiders)
-        for (int i = 0; i < count; i++) {
-            indices[i] = particle_list[indices[i]].original_id; // make sure what you want
-        }
+        //for (int i = 0; i < count; i++) {
+        //    indices[i] = particle_list[indices[i]].original_id; // make sure what you want
+        //}
     }
     
     
@@ -2843,6 +2854,7 @@ public:
         ds.planetesimal_list.density_threshold = std::pow(progIO->numerical_parameters.Omega, 2.) / progIO->numerical_parameters.PI / progIO->numerical_parameters.grav_constant * 2.; // = 160 for the fiducial run
         // and we are looking for clumps with certain mass_crit & peak_rho_crit
         ds.planetesimal_list.clump_mass_threshold = ds.planetesimal_list.density_threshold / QuadraticSpline(sn::dvec(0)) * progIO->numerical_parameters.cell_volume; // at least enough mass to pass rho_crit
+        ds.planetesimal_list.clump_mass_threshold = std::max(ds.planetesimal_list.clump_mass_threshold, progIO->numerical_parameters.min_trusted_mass_code_unit);
         ds.planetesimal_list.peak_density_threshold = 3 * ds.planetesimal_list.density_threshold; // from HOP's experience (ref: https://www.cfa.harvard.edu/~deisenst/hop/hop_doc.html)
 
         // 1, Calculate the particle densities (only for particles with dpar > Omega^2/G)
@@ -2946,7 +2958,6 @@ public:
         
         // With certain parameters, there will be A LOT clumps all over the computational domain. Hopping will also identify very loose associations, where particle densities are marginally higher than the threshold. Such associations are in fact sparse collections of a few particles. For efficiency, we remove them immediately.
         RemoveSmallMassAndLowPeak(ds);
-        
         progIO->log_info << "Hopping to peaks done, naive peak amount = " << ds.planetesimal_list.planetesimals.size() << "; ";
 
         /* RL: debug use -- print out particle groups' properties after hopping and before merging
@@ -3072,6 +3083,23 @@ public:
         }
         progIO->log_info << "Unbinding particles done. ";
 
+        // RL: test use
+        // search potential bound particles within Hill Radius
+        for (auto &it : ds.planetesimal_list.planetesimals) {
+            for (auto index : it.second.indices) {
+                particle_list[index].in_clump_flag = true;
+            }
+        }
+        for (auto &it : ds.planetesimal_list.planetesimals) {
+            size_t tmp_num_particles;
+            do {
+                tmp_num_particles = it.second.indices.size();
+                it.second.SearchBoundParticlesWithinHillRadius(ds.tree);
+                it.second.CalculateHillRadius();
+            } while (it.second.indices.size() > tmp_num_particles);
+        }
+        progIO->log_info << "Rebinding particles done. ";
+
         // 6, remove those groups that only have small masses or have relatively low peak densities
         RemoveSmallMassAndLowPeak(ds);
         progIO->log_info << "Remove low&small peaks, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
@@ -3100,15 +3128,7 @@ public:
         progIO->log_info << "Ripping Envelope (" << ripping_outerior_count << "); ";
 
         // 8, again remove those groups that only have small masses relatively low peak densities
-        for (auto it : ds.planetesimal_list.planetesimals) {
-            if (it.second.total_mass < ds.planetesimal_list.clump_mass_threshold || particle_list[it.first].new_density < ds.planetesimal_list.peak_density_threshold) {
-                peaks_to_be_deleted.push_back(it.first);
-            }
-        }
-        for (auto it : peaks_to_be_deleted) {
-            ds.planetesimal_list.planetesimals.erase(it);
-        }
-        peaks_to_be_deleted.resize(0);
+        RemoveSmallMassAndLowPeak(ds);
         progIO->log_info << "Remove low&small peaks again, now " << ds.planetesimal_list.planetesimals.size() << " left; ";
 
         // 9, remove those planetesimals that locate at ghost zones
@@ -3131,6 +3151,9 @@ public:
                 ds.planetesimal_list.peaks_and_masses.push_back(std::pair<uint32_t, double>(it.first, it.second.total_mass));
             }
             std::sort(ds.planetesimal_list.peaks_and_masses.begin(), ds.planetesimal_list.peaks_and_masses.end(), [](const std::pair<uint32_t, double> &a, const std::pair<uint32_t, double> &b) {
+                if (a.second == b.second) {
+                    return a.first < b.first; // for clumps with the same # of particles, ranking by peak_id
+                }
                 return a.second < b.second;
             });
 
@@ -3158,7 +3181,9 @@ public:
         } else {
             progIO->out_content << "found zero clumps";
         }
-        ds.planetesimal_list.OutputPlanetesimalsInfo(loop_count, ds.tree, ds.particle_set);
+        if (loop_count >= 0) { // RL: input negative loop_count for test purpose
+            ds.planetesimal_list.OutputPlanetesimalsInfo(loop_count, ds.tree, ds.particle_set);
+        }
 
         // \todo: think about small-passing-by-clumps --> they are very weakly-bound with the big one while embeded in it
         // \todo: for the small-passing-by-clumps, I found the angles between their velocities and the center-of-mass velocity are fairly large, but are not the largest among all the particles. However, their |P_grav + E_k|/E_k are the lowest (between 0.2 to 0.3) among all the particles. This may be a hint to distinguish them.
@@ -3369,17 +3394,44 @@ public:
         SmallVec<double, D> tmp_center_of_mass, tmp_vel_com;
         double total_energy_over_mass_product;
 
+        /* RL: test use
+        double last_tmp_total_mass;
+        tmp_total_mass = total_mass;
+        last_tmp_total_mass = total_mass;
+        while (i != 1) {
+            tmp_total_mass -= particle_list[particles[i].first].mass; // only internal particles
+            tmp_center_of_mass = (tmp_center_of_mass * last_tmp_total_mass - particle_list[particles[i].first].pos * particle_list[particles[i].first].mass) / tmp_total_mass;
+            tmp_vel_com = (tmp_vel_com * last_tmp_total_mass - particle_list[particles[i].first].vel * particle_list[particles[i].first].mass) / tmp_total_mass;
+            last_tmp_total_mass = tmp_total_mass;
+        //*/
+
+        //
         while (i != 0) {
             tmp_total_mass = total_mass - particle_list[particles[i].first].mass;
             tmp_center_of_mass = (center_of_mass * total_mass - particle_list[particles[i].first].pos * particle_list[particles[i].first].mass) / tmp_total_mass;
             tmp_vel_com = (vel_com * total_mass - particle_list[particles[i].first].vel * particle_list[particles[i].first].mass) / tmp_total_mass;
+        //*/
 
-            /* you may tweak them to achieve P_grav + 2 * E_k > 0
+            /* you may tweak them to achieve P_grav + 2 * E_k  0
             double P_grav, E_k;
             P_grav = -progIO->numerical_parameters.grav_constant / (tmp_center_of_mass - particle_list[particles[i].first].pos).Norm();
             E_k = 0.5 / total_mass * (tmp_vel_com - particle_list[particles[i].first].vel).Norm2();
+             * we omit tmp_total_mass * particle_list[particles[i].first].mass
+             * since P_grav and E_k all have it
+             * ***** ***** ***** *****
+             * I also tried to include "the tidal energy" and "vertically gravitational potential" like below
+            double P_tidal, P_vg;
+            P_tidal = + 1.5 / total_mass * pow(progIO->numerical_parameters.Omega, 2) * pow(tmp_center_of_mass[0] - particle_list[particles[i].first].pos[0], 2);
+            P_vg = - 0.5 / total_mass * pow(progIO->numerical_parameters.Omega, 2) * pow(tmp_center_of_mass[2] - particle_list[particles[i].first].pos[2], 2);
+             * However, such a tidal energy does not differentiate the prograde and retrograde orbits where the latter one is usually more stable in numerical studies.
+             * And such a vertically gravitational potential may classify two clumps with a large vertical separation as bound binaries even though they don't feel each other.
+             * Therefore, we should still check those standard energies.
+             * An promising approach is that we check separation / Hill radius, and then check relative velocity / Hill velocity, where Hill velocity = Hill radius * Omega_K. The second step is equivalent to checking binding energy. If we plot Delta r / R_Hill versus Delta v / V_Hill and draw a line following 1/sqrt(dr), we can get a rough idea of how bound those possible binaries are.
              */
-            total_energy_over_mass_product = 0.5 / total_mass * (tmp_vel_com - particle_list[particles[i].first].vel).Norm2() - progIO->numerical_parameters.grav_constant / (tmp_center_of_mass - particle_list[particles[i].first].pos).Norm();
+
+            total_energy_over_mass_product =
+                    + 0.5 / total_mass * (tmp_vel_com - particle_list[particles[i].first].vel).Norm2()
+                    - progIO->numerical_parameters.grav_constant / (tmp_center_of_mass - particle_list[particles[i].first].pos).Norm();
             if (total_energy_over_mass_product > 0) { // unbound
                 std::swap(indices[i], indices.back());
                 indices.pop_back();
@@ -3395,6 +3447,40 @@ public:
         std::vector<std::pair<uint32_t, double>> tmp;
         particles.swap(tmp);
         SortParticles(particle_list);
+    }
+
+    /*! \fn void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree)
+     *  \brief search potential bound particles within Hill radius */
+    void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree) {
+        uint32_t nearby_count = 0;
+        tree.RecursiveBallSearchCount(center_of_mass, tree.root, Hill_radius, nearby_count);
+        auto *nearby_indices = new uint32_t[nearby_count];
+        tree.BallSearch(center_of_mass, Hill_radius, nearby_indices, nearby_count);
+
+        double total_energy_over_mass_product;
+
+        for (uint32_t i = 0; i != nearby_count; i++) {
+            if (tree.particle_list[i].in_clump_flag) {
+                continue;
+            } else {
+                auto tmp_total_mass = total_mass + tree.particle_list[i].mass;
+                // again we omit total_mass * tree.particle_list[i].mass since P_grav and E_k all have it
+                total_energy_over_mass_product = + 0.5 / tmp_total_mass * (vel_com-tree.particle_list[i].vel).Norm2()
+                        - progIO->numerical_parameters.grav_constant / (center_of_mass - tree.particle_list[i].pos).Norm();
+                if (total_energy_over_mass_product < 0) { // bound
+                    indices.push_back(i);
+                    total_mass = tmp_total_mass;
+                    center_of_mass = (center_of_mass * total_mass + tree.particle_list[i].mass * tree.particle_list[i].pos) / total_mass;
+                    vel_com = (total_mass * vel_com + tree.particle_list[i].mass * tree.particle_list[i].vel) / total_mass;
+                    tree.particle_list[i].in_clump_flag = true;
+                }
+            }
+        }
+        if (indices.size() > particles.size()) {
+            std::vector<std::pair<uint32_t, double>> tmp;
+            particles.swap(tmp);
+            SortParticles(tree.particle_list);
+        }
     }
 
     /*! \fn void CalculateHillRadius()
@@ -3438,12 +3524,13 @@ public:
     std::unordered_map<uint32_t, Planetesimal<D>> planetesimals;
 
     /*! \fn bool IsGravitationallyBound(Planetesimal<D> &p1, Planetesimal<D> &p2)
-     *  \brief determine if two planeteismal structures are gravitationally bound */
+     *  \brief determine if two planeteismals structures are gravitationally bound */
     bool IsGravitationallyBound(Planetesimal<D> &p1, Planetesimal<D> &p2) {
-        // first calculate the mutual gravitational potential energy and total kinematic energy
+        // first calculate the mutual gravitational potential energy total kinematic energy, mutual tidal energy and vertically gravitational potential
         // omitting p1.total_mass * p2.total_mass since both P_grav and E_k have it
+        double total_mass = p1.total_mass + p2.total_mass;
         double P_grav = - progIO->numerical_parameters.grav_constant / (p1.center_of_mass - p2.center_of_mass).Norm();
-        double E_k = 0.5 / (p1.total_mass + p2.total_mass) * (p1.vel_com - p2.vel_com).Norm2();
+        double E_k = 0.5 / total_mass * (p1.vel_com - p2.vel_com).Norm2();
         if (P_grav + E_k < 0.) {
             return true;
         } else {
@@ -3493,6 +3580,7 @@ public:
             progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
         }
 
+        /* RL: old output with many diagnostic info
         file_planetesimals << std::setw(24) << "# center_of_mass[x]" << std::setw(24) << "center_of_mass[y]" << std::setw(24) << "center_of_mass[z]" << std::setw(10) << "peak_id" << std::setw(24) << "<-its_rho" << std::setw(10) << "Npar" << std::setw(24) << "total_mass" << std::setw(24) << "Hill_radius" << std::setw(24) << "max(dist2COM)" << std::setw(24) << "total_mass/volume_by_max_dist2COM" << std::endl;
         for (auto peak : peaks_and_masses) {
             auto it = planetesimals.find(peak.first);
@@ -3504,7 +3592,42 @@ public:
                     tmp_num_particles += tmp_it->second.size()-1;
                 }
             }
-            file_planetesimals << std::setw(10) << tmp_num_particles << std::setw(24) << it->second.total_mass << std::setw(24) << it->second.Hill_radius << std::setw(24) << it->second.particles.back().second << std::setw(24) << it->second.total_mass / (progIO->numerical_parameters.four_PI_over_three * pow(it->second.particles.back().second, 3)) << std::endl;
+            file_planetesimals << std::setw(10) << tmp_num_particles << std::setw(24) << it->second.total_mass << std::setw(24) << it->second.Hill_radius << std::setw(24) << it->second.particles.back().second << std::setw(24) << it->second.total_mass / (progIO->numerical_parameters.four_PI_over_three * pow(it->second.particles.back().second, 3));
+            file_planetesimals << std::endl;
+        }
+        //*/
+
+        file_planetesimals << std::setw(12) << "#peak_id"
+                           << std::setw(12) << "Npar"
+                           << std::setw(24) << "total_mass"
+                           << std::setw(24) << "center_of_mass[x]"
+                           << std::setw(24) << "center_of_mass[y]"
+                           << std::setw(24) << "center_of_mass[z]"
+                           << std::setw(24) << "vel_COM[x]"
+                           << std::setw(24) << "vel_COM[y]"
+                           << std::setw(24) << "vel_COM[z]"
+                           << std::setw(24) << "Hill_radius"
+                           << std::endl;
+        for (auto peak : peaks_and_masses) {
+            auto it = planetesimals.find(peak.first);
+            auto tmp_num_particles = it->second.indices.size();
+            for (auto item : it->second.indices) {
+                auto tmp_it = tree.sink_particle_indices.find(item);
+                if (tmp_it != tree.sink_particle_indices.end()) {
+                    tmp_num_particles += tmp_it->second.size()-1;
+                }
+            }
+            file_planetesimals << std::setw(12) << it->first << std::setw(12) << tmp_num_particles
+                               << std::setprecision(16)
+                               << std::setw(24) << it->second.total_mass
+                               << std::setw(24) << it->second.center_of_mass[0]
+                               << std::setw(24) << it->second.center_of_mass[1]
+                               << std::setw(24) << it->second.center_of_mass[2]
+                               << std::setw(24) << it->second.vel_com[0]
+                               << std::setw(24) << it->second.vel_com[1]
+                               << std::setw(24) << it->second.vel_com[2]
+                               << std::setw(24) << it->second.Hill_radius;
+            file_planetesimals << std::endl;
         }
         file_planetesimals.close(); //*/
 
@@ -3653,6 +3776,174 @@ public:
             return a.second.size() < b.second.size();
         });
         return search_results;
+
+    }
+
+    /*! \fn template <class T> void FindSubClumpsInVelocitySpace(const DataSet<T, D> &ds)
+     *  \brief search possible sub clumps in velocity space */
+    template <class T>
+    void FindSubClumpsInVelocitySpace(const DataSet<T, D> &ds, const uint32_t peak_id) {
+        DataSet<T, D> tmp_ds;
+        auto tmp_planetesimal = ds.planetesimal_list.planetesimals.find(peak_id);
+        if (tmp_planetesimal != ds.planetesimal_list.planetesimals.end()) {
+            progIO->log_info << "Trying to find subclumps in velocity space for peak_id " << peak_id << std::endl;
+            progIO->Output(std::cout, progIO->log_info, __even_more_output, __all_processors);
+            uint32_t tmp_num_particles = tmp_planetesimal->second.indices.size();
+            for (auto item : tmp_planetesimal->second.indices) {
+                auto tmp_it = ds.tree.sink_particle_indices.find(item);
+                if (tmp_it != ds.tree.sink_particle_indices.end()) {
+                    tmp_num_particles += tmp_it->second.size() - 1;
+                }
+            }
+            tmp_ds.particle_set.num_total_particles = tmp_num_particles;
+            tmp_ds.particle_set.num_particles = tmp_num_particles;
+            tmp_ds.particle_set.AllocateSpace(tmp_num_particles);
+            uint32_t tmp_id = 0;
+            Particle<dim> *p = &tmp_ds.particle_set.particles[tmp_id];
+            for (auto par : tmp_planetesimal->second.indices) {
+                if (ds.tree.particle_list[par].sink_flag) {
+                    auto sink_par = ds.tree.sink_particle_indices.find(par);
+                    std::vector<uint32_t> tmp_id_list;
+                    for (auto it : sink_par->second) {
+                        *p = ds.particle_set.particles[it];
+                        decltype(p->pos) tmp = p->vel;
+                        p->vel = p->pos;
+                        p->pos = tmp;
+                        tmp_id++;
+                        p = &tmp_ds.particle_set.particles[tmp_id];
+                    }
+                } else {
+                    *p = ds.particle_set.particles[ds.tree.particle_list[par].original_id];
+                    decltype(p->pos) tmp = p->vel;
+                    p->vel = p->pos;
+                    p->pos = tmp;
+                    tmp_id++;
+                    p = &tmp_ds.particle_set.particles[tmp_id];
+                }
+            }
+
+            SmallVec<double, dim> vel_min{0};
+            SmallVec<double, dim> vel_max{0};
+            for (int i = 0; i != dim; i++) {
+                Particle<dim> *p = std::min_element(tmp_ds.particle_set.particles,
+                                                    tmp_ds.particle_set.particles + tmp_ds.particle_set.num_particles,
+                                                    [i](const Particle<dim> &a, const Particle<dim> &b) {
+                                                        return a.pos[i] < b.pos[i];
+                                                    });
+                vel_min[i] = p->pos[i];
+                p = std::max_element(tmp_ds.particle_set.particles,
+                                     tmp_ds.particle_set.particles + tmp_ds.particle_set.num_particles,
+                                     [i](const Particle<dim> &a, const Particle<dim> &b) {
+                                         return a.pos[i] < b.pos[i];
+                                     });
+                vel_max[i] = p->pos[i];
+            }
+            //std::cout << "vel_min = " << vel_min << " , vel_max = " << vel_max << std::endl;
+            // By plotting u, v, and w, there seems to be no easy way to separate passing-by clumps.
+            // N.B., if velocities are big, then the following line need new numerical parameters
+            tmp_ds.tree.BuildTree(progIO->numerical_parameters, tmp_ds.particle_set);
+            if (tmp_ds.tree.num_nodes < progIO->numerical_parameters.num_neighbors_in_knn_search) {
+                progIO->log_info << "This tree is too small to find subclumps. Abort. " << std::endl;
+                progIO->Output(std::cout, progIO->log_info, __even_more_output, __all_processors);
+            } else {
+                tmp_ds.tree.FindPlanetesimals(tmp_ds, BHtree<dim>::QseudoQuadraticSplinesKernel<float>, -1);
+            }
+
+        } else {
+            progIO->error_message << "Error: Trying to find subclumps in velocity space for NONEXISTENT peak_id " << peak_id << ", but will proceed. " << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        } // if (tmp_planetesimal != ds.planetesimal_list.planetesimals.end())
+    }
+
+    /*! \fn void SearchBinaryPlanetesimals(int loop_count)
+     *  \brief search possible binary planetesimals */
+    template <class T>
+    void SearchBinaryPlanetesimals(int loop_count) {
+        DataSet<T, D> tmp_ds;
+        tmp_ds.particle_set.num_total_particles = static_cast<uint32_t>(num_planetesimals);
+        tmp_ds.particle_set.num_particles = static_cast<uint32_t>(num_planetesimals);
+        tmp_ds.particle_set.AllocateSpace(tmp_ds.particle_set.num_total_particles);
+
+        uint32_t tmp_id = 0;
+        Particle<dim> *p = &tmp_ds.particle_set[tmp_id];
+        for (auto it : planetesimals) {
+            p->pos = it.second.center_of_mass;
+            p->vel = it.second.vel_com;
+            p->id = it.first;
+            p->density = it.second.Hill_radius; // use density to store Hill radii
+            p->property_index = 0; // has no meaning, N.B., tmp_ds.tree does not have correct mass data
+        tmp_id++;
+            p = &tmp_ds.particle_set[tmp_id];
+        }
+        tmp_ds.tree.BuildTree(progIO->numerical_parameters, tmp_ds.particle_set, true);
+        double max_distance = 0;
+        uint32_t indices[64]; // 32 should be enough here
+        std::vector<std::pair<uint32_t, uint32_t>> binaries;
+        std::vector<double> binary_separations;
+        for (uint32_t i = 0; i != tmp_ds.particle_set.num_particles; i++) {
+            tmp_ds.tree.KNN_Search(tmp_ds.particle_set[i].pos, 64, max_distance, indices, true); // the closest one is itself, in fact we may consider BallSearch
+            if (max_distance < tmp_ds.particle_set[i].density) {
+                progIO->error_message << "Warning: Searching 64 neighbor clumps may not be enough for peak_id" << tmp_ds.particle_set[i].id << ", consider more or alternative approach. Proceed anyway..." << std::endl;
+                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+            }
+            uint32_t j = 1;
+            // directly use R_Hill
+            double dis = (tmp_ds.particle_set[i].pos - tmp_ds.tree.particle_list[indices[j]].pos).Norm();
+            double mutual_Hill_radius = pow(pow(tmp_ds.particle_set[i].density, 3.)+pow(tmp_ds.particle_set[tmp_ds.tree.particle_list[indices[j]].original_id].density, 3.), 1./3.);
+            while (dis < mutual_Hill_radius) {
+                // only count the other peak_id that are smaller than itself to avoid repetition
+                //if (tmp_ds.particle_set[tmp_ds.tree.particle_list[indices[j]].original_id].id > tmp_ds.particle_set[i].id) {
+                    binaries.push_back(std::pair<uint32_t, uint32_t>(tmp_ds.particle_set[i].id, tmp_ds.particle_set[tmp_ds.tree.particle_list[indices[j]].original_id].id));
+                    binary_separations.push_back(dis/tmp_ds.particle_set[i].density);
+                //}
+                j++;
+                if (j >= 64) {
+                    break;
+                    progIO->error_message << "Warning: Binary pairs for peak_id " << tmp_ds.particle_set[i].id << " may be more than 36. Consider finding more nearest neighbors. Proceed anyway..." << std::endl;
+                    progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+                }
+                dis = (tmp_ds.particle_set[i].pos - tmp_ds.tree.particle_list[indices[j]].pos).Norm();
+                mutual_Hill_radius = pow(pow(tmp_ds.particle_set[i].density, 3.)+pow(tmp_ds.particle_set[tmp_ds.tree.particle_list[indices[j]].original_id].density, 3.), 1./3.);
+            }
+            //*/
+            /* directly use energy
+            auto itself = planetesimals.find(tmp_ds.particle_set[i].id);
+            for (j = 1; j != 32; j++) {
+                auto it = planetesimals.find(tmp_ds.particle_set[tmp_ds.tree.particle_list[indices[j]].original_id].id);
+                if (IsGravitationallyBound(itself->second, it->second)) {
+                    binaries.push_back(std::pair<uint32_t, uint32_t>(tmp_ds.particle_set[i].id, tmp_ds.particle_set[tmp_ds.tree.particle_list[indices[j]].original_id].id));
+                    binary_separations.push_back((tmp_ds.particle_set[i].pos - tmp_ds.tree.particle_list[indices[j]].pos).Norm()/tmp_ds.particle_set[i].density);
+                }
+            }
+            //*/
+
+        }
+        if (binaries.size() > 0) {
+            progIO->log_info << "Found " << binaries.size() << " pair(s) of possible binaries" << std::endl;
+            progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+
+            std::ofstream file_binaries;
+            std::ostringstream tmp_ss;
+            tmp_ss << std::setprecision(3) << std::fixed << std::setw(7) << std::setfill('0') << progIO->physical_quantities[loop_count].time;
+            std::string tmp_file_name;
+            if (progIO->file_name.output_file_path.find_last_of('/') != std::string::npos) {
+                tmp_file_name = progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/')) + std::string("/binaries_at_") + tmp_ss.str() + std::string(".txt");
+            } else {
+                // operates under current directory
+                tmp_file_name = std::string("binaries_at_") + tmp_ss.str() + std::string(".txt");
+            }
+
+            file_binaries.open(tmp_file_name, std::ofstream::out);
+            if (!(file_binaries.is_open())) {
+                progIO->error_message << "Error: Failed to open file " << tmp_file_name << " due to " << std::strerror(errno) << std::endl;
+                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+            }
+            file_binaries << "# Binary Pairs' Peak ID" << std::endl;
+            for (auto it : binaries) {
+                file_binaries << std::setw(10) << it.first << std::setw(10) << it.second << std::endl;
+            }
+            file_binaries.close();
+        }
 
     }
 

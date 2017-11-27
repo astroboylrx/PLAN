@@ -374,7 +374,7 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     file_lis2vtk << "DATASET UNSTRUCTURED_POINTS\n";
     file_lis2vtk << "POINTS " << ds.particle_set.num_particles << " float\n";
 
-    for (auto i = 0; i != ds.particle_set.num_particles; i++) {
+    for (unsigned int i = 0; i != ds.particle_set.num_particles; i++) {
         if (ds.particle_set[i].pos[0] > 2e-2 && ds.particle_set[i].pos[0] < 3e-2 && ds.particle_set[i].pos[1] > 7.5e-2 && ds.particle_set[i].pos[1] < 8.5e-2 && ds.particle_set[i].pos[2] > -1e-2 && ds.particle_set[i].pos[2] < 1e-2)
         file_lis2vtk << ds.particle_set[i].pos[0] << " " << ds.particle_set[i].pos[1] << " " << ds.particle_set[i].pos[2] << "\n";
     }

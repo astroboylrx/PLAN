@@ -42,6 +42,8 @@ void NumericalParameters::CalculateNewParameters()
     grav_constant = four_PI_G / four_PI;
     shear_speed = q * Omega * box_length[0];
 
+    min_trusted_mass_code_unit = 3 * pow(cell_length[0], 3) * Omega*Omega / rho_g0 / grav_constant;
+
 }
 
 /*! \fn void ReadNumericalParameters(std::string filename)

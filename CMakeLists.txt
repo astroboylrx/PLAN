@@ -23,6 +23,7 @@ if (PARALLEL)
     
     find_package(MPI REQUIRED)
     target_link_libraries(plan PUBLIC ${MPI_LIBRARIES})
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_LINK_FLAGS}")
 else ()
     message("============================================================")
     message("Generating Makefile for serial program...")
@@ -33,5 +34,6 @@ endif ()
 
 find_package(Boost REQUIRED)
 target_link_libraries(plan PUBLIC ${Boost_LIBRARIES})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 set(CMAKE_CXX_STANDARD 11)

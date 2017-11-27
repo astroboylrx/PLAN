@@ -74,6 +74,14 @@ int main(int argc, const char * argv[])
             /***** Step III-B, identity high density region and find planetesimals *****/
             ds.tree.FindPlanetesimals(ds, BHtree<dim>::QseudoQuadraticSplinesKernel<float>, loop_count);
             ds.planetesimal_list.WriteBasicResults(loop_count);
+            ds.planetesimal_list.SearchBinaryPlanetesimals<float>(loop_count);
+
+            /***** Step III-C, test region --- perform more calculatoin to improve results *****/
+            /* RL: test use
+            for (auto it : ds.planetesimal_list.planetesimals) {
+                ds.planetesimal_list.FindSubClumpsInVelocitySpace(ds, it.first);
+            }
+            //*/
 
         } // if (progIO->flags.find_clumps_flag)
 
