@@ -3145,8 +3145,14 @@ public:
         ds.planetesimal_list.num_planetesimals = ds.planetesimal_list.planetesimals.size();
         progIO->out_content << "Finish clump finding for t = " << ds.particle_set.time << ", ";
 
+        // 10, perform more scientific calculations
+        for (auto &it : ds.planetesimal_list.planetesimals) {
+            it.second.CalculateAngularMomentum(ds.tree);
+        }
+
         // Before ending, output some info
         if (ds.planetesimal_list.num_planetesimals > 0) {
+            // construct "peaks_and_masses" in order to sort clumps by mass
             for (auto it : ds.planetesimal_list.planetesimals) {
                 ds.planetesimal_list.peaks_and_masses.push_back(std::pair<uint32_t, double>(it.first, it.second.total_mass));
             }
@@ -3262,11 +3268,11 @@ public:
     
     /*! \var double Hill_radius
      *  \brief Hill radius */
-    double Hill_radius;
+    double Hill_radius {0};
 
-    /*! \var double Jz
-     *  \brief angular momentum in z-direction */
-    double Jz;
+    /*! \var double J
+     *  \brief angular momentum */
+    SmallVec<double, D> J {0};
 
     /*! \fn void CalculateKinematicProperties(typename BHtree<D>::InternalParticle *particle_list)
      *  \brief calculate the total_mass, center_of_mass, and vel_com */
@@ -3484,9 +3490,29 @@ public:
     }
 
     /*! \fn void CalculateHillRadius()
-     *  \brief calcualte the Hill radius */
+     *  \brief calculate the Hill radius */
     void CalculateHillRadius() {
         Hill_radius = pow(total_mass * progIO->numerical_parameters.grav_constant / 3. / progIO->numerical_parameters.Omega / progIO->numerical_parameters.Omega, 1./3.);
+    }
+
+    /*! \fn void CalculateAngularMomentum(BHtree<D> &tree)
+     *  \brief calculate the Hill radius */
+    void CalculateAngularMomentum(BHtree<D> &tree) {
+        SmallVec<double, D> tmp_j {0};
+        SmallVec<double, D> tmp_dr {0};
+        SmallVec<double, D> tmp_dv {0};
+
+        for (auto it : indices) {
+            tmp_dr = tree.particle_list[it].pos - center_of_mass;
+            tmp_dv = tree.particle_list[it].vel - vel_com;
+            tmp_j = tmp_dr.Cross(tmp_dv);
+
+            tmp_j[0] -= progIO->numerical_parameters.Omega * tmp_dr[0] * tmp_dr[2];
+            tmp_j[1] -= progIO->numerical_parameters.Omega * tmp_dr[1] * tmp_dr[2];
+            tmp_j[2] += progIO->numerical_parameters.Omega * (tmp_dr[0]*tmp_dr[0] + tmp_dr[1]*tmp_dr[1]);
+
+            J += tree.particle_list[it].mass * tmp_j;
+        }
     }
 };
 
@@ -3498,9 +3524,9 @@ class PlanetesimalList {
 private:
 
 public:
-    /*! \var unsigned int num_planetesimals
+    /*! \var uint32_t num_planetesimals
      *  \breif the number of planetesimals found */
-    unsigned long num_planetesimals {0};
+    uint32_t num_planetesimals {0};
 
     /*! \var double density_threshold
      *  \brief the density criterion for choosing particles (~ rho_crit for outer rims of planetesimals) */
@@ -3600,13 +3626,16 @@ public:
         file_planetesimals << std::setw(12) << "#peak_id"
                            << std::setw(12) << "Npar"
                            << std::setw(24) << "total_mass"
+                           << std::setw(24) << "Hill_radius"
                            << std::setw(24) << "center_of_mass[x]"
                            << std::setw(24) << "center_of_mass[y]"
                            << std::setw(24) << "center_of_mass[z]"
                            << std::setw(24) << "vel_COM[x]"
                            << std::setw(24) << "vel_COM[y]"
                            << std::setw(24) << "vel_COM[z]"
-                           << std::setw(24) << "Hill_radius"
+                           << std::setw(24) << "J[x]"
+                           << std::setw(24) << "J[y]"
+                           << std::setw(24) << "J[z]"
                            << std::endl;
         for (auto peak : peaks_and_masses) {
             auto it = planetesimals.find(peak.first);
@@ -3620,13 +3649,16 @@ public:
             file_planetesimals << std::setw(12) << it->first << std::setw(12) << tmp_num_particles
                                << std::setprecision(16)
                                << std::setw(24) << it->second.total_mass
+                               << std::setw(24) << it->second.Hill_radius
                                << std::setw(24) << it->second.center_of_mass[0]
                                << std::setw(24) << it->second.center_of_mass[1]
                                << std::setw(24) << it->second.center_of_mass[2]
                                << std::setw(24) << it->second.vel_com[0]
                                << std::setw(24) << it->second.vel_com[1]
                                << std::setw(24) << it->second.vel_com[2]
-                               << std::setw(24) << it->second.Hill_radius;
+                               << std::setw(24) << it->second.J[0]
+                               << std::setw(24) << it->second.J[1]
+                               << std::setw(24) << it->second.J[2];
             file_planetesimals << std::endl;
         }
         file_planetesimals.close(); //*/
@@ -3865,25 +3897,29 @@ public:
         tmp_ds.particle_set.AllocateSpace(tmp_ds.particle_set.num_total_particles);
 
         uint32_t tmp_id = 0;
-        Particle<dim> *p = &tmp_ds.particle_set[tmp_id];
+        Particle<dim> *p;
         for (auto it : planetesimals) {
+            p = &tmp_ds.particle_set[tmp_id];
             p->pos = it.second.center_of_mass;
             p->vel = it.second.vel_com;
             p->id = it.first;
             p->density = it.second.Hill_radius; // use density to store Hill radii
             p->property_index = 0; // has no meaning, N.B., tmp_ds.tree does not have correct mass data
-        tmp_id++;
-            p = &tmp_ds.particle_set[tmp_id];
+            tmp_id++;
         }
+
         tmp_ds.tree.BuildTree(progIO->numerical_parameters, tmp_ds.particle_set, true);
         double max_distance = 0;
-        uint32_t indices[64]; // 32 should be enough here
+        uint32_t nearest_neighbors_to_search = 64;
+        nearest_neighbors_to_search = std::min(nearest_neighbors_to_search, num_planetesimals);
+        auto *indices = new uint32_t[nearest_neighbors_to_search];
+
         std::vector<std::pair<uint32_t, uint32_t>> binaries;
         std::vector<double> binary_separations;
         for (uint32_t i = 0; i != tmp_ds.particle_set.num_particles; i++) {
-            tmp_ds.tree.KNN_Search(tmp_ds.particle_set[i].pos, 64, max_distance, indices, true); // the closest one is itself, in fact we may consider BallSearch
-            if (max_distance < tmp_ds.particle_set[i].density) {
-                progIO->error_message << "Warning: Searching 64 neighbor clumps may not be enough for peak_id" << tmp_ds.particle_set[i].id << ", consider more or alternative approach. Proceed anyway..." << std::endl;
+            tmp_ds.tree.KNN_Search(tmp_ds.particle_set[i].pos, nearest_neighbors_to_search, max_distance, indices, true); // the closest one is itself, in fact we may consider BallSearch
+            if (max_distance < tmp_ds.particle_set[i].density && nearest_neighbors_to_search != num_planetesimals) {
+                progIO->error_message << "Warning: Searching " << nearest_neighbors_to_search << " neighbor clumps may not be enough for peak_id" << tmp_ds.particle_set[i].id << ", consider more or alternative approach. Proceed anyway..." << std::endl;
                 progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
             }
             uint32_t j = 1;
@@ -3897,9 +3933,9 @@ public:
                     binary_separations.push_back(dis/tmp_ds.particle_set[i].density);
                 //}
                 j++;
-                if (j >= 64) {
+                if (j >= nearest_neighbors_to_search && nearest_neighbors_to_search != num_planetesimals) {
                     break;
-                    progIO->error_message << "Warning: Binary pairs for peak_id " << tmp_ds.particle_set[i].id << " may be more than 36. Consider finding more nearest neighbors. Proceed anyway..." << std::endl;
+                    progIO->error_message << "Warning: Binary pairs for peak_id " << tmp_ds.particle_set[i].id << " may be more than " << nearest_neighbors_to_search << ". Consider finding more nearest neighbors. Proceed anyway..." << std::endl;
                     progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
                 }
                 dis = (tmp_ds.particle_set[i].pos - tmp_ds.tree.particle_list[indices[j]].pos).Norm();
@@ -3918,7 +3954,35 @@ public:
             //*/
 
         }
+
         if (binaries.size() > 0) {
+            // remove duplicated pairs
+            for (auto &it : binaries) {
+                if (it.first > it.second) {
+                    auto tmp_element = it.first;
+                    it.first = it.second;
+                    it.second = tmp_element;
+                }
+            }
+            std::sort(binaries.begin(), binaries.end(), [](const std::pair<uint32_t, uint32_t> &a, const std::pair<uint32_t, uint32_t> &b) {
+                if (a.first == b.first) {
+                    return a.second < b.second;
+                }
+                return a.first < b.first;
+            });
+            for (size_t i = binaries.size()-1; i > 0; i--) {
+                if (binaries[i].first == binaries[i-1].first && binaries[i].second == binaries[i-1].second) {
+                    binaries.back().swap(*(binaries.begin()+i));
+                    binaries.pop_back();
+                }
+            }
+            std::sort(binaries.begin(), binaries.end(), [](const std::pair<uint32_t, uint32_t> &a, const std::pair<uint32_t, uint32_t> &b) {
+                if (a.first == b.first) {
+                    return a.second < b.second;
+                }
+                return a.first < b.first;
+            });
+
             progIO->log_info << "Found " << binaries.size() << " pair(s) of possible binaries" << std::endl;
             progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
 
@@ -3943,6 +4007,9 @@ public:
                 file_binaries << std::setw(10) << it.first << std::setw(10) << it.second << std::endl;
             }
             file_binaries.close();
+        } else {
+            progIO->log_info << "No binary found." << std::endl;
+            progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
         }
 
     }
