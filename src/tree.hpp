@@ -3504,7 +3504,8 @@ public:
 
         for (auto it : indices) {
             tmp_dr = tree.particle_list[it].pos - center_of_mass;
-            tmp_dv = tree.particle_list[it].vel - vel_com;
+            tmp_dv = tree.particle_list[it].vel - SmallVec<double, 3>(0., progIO->numerical_parameters.q * progIO->numerical_parameters.Omega*tree.particle_list[it].pos[0], 0.)
+                     - (vel_com - SmallVec<double, 3>(0., progIO->numerical_parameters.q * progIO->numerical_parameters.Omega*center_of_mass[0], 0.));
             tmp_j = tmp_dr.Cross(tmp_dv);
 
             tmp_j[0] -= progIO->numerical_parameters.Omega * tmp_dr[0] * tmp_dr[2];
@@ -3513,6 +3514,8 @@ public:
 
             J += tree.particle_list[it].mass * tmp_j;
         }
+
+        J /= total_mass;
     }
 };
 
