@@ -145,11 +145,11 @@ If you do not specify any flags, then --Find_Clumps will be turned on automatica
 ➜  build $ mpirun -np 2 ./plan -c 64 -i ../data/ -b Par_Strat3d -p combined -f 214:215:1 -o ./result.txt
 Program begins now (local time: Mon Mar 26 02:18:10 2018).
 *******************************************************************************
-Set the number of available threads for OpenMP to 8. This number can also be fixed manually by specify "num_threads" in the parameter input file.
+Set the number of available threads for OpenMP to 8. This number can also be fixed manually by specifying "num_threads" in the parameter input file.
 Note that every processor in MPI will utilize such number of threads in its own node. It is recommendeded to use --map-by ppr:n:node in the Hybrid scheme.
 For example, to obtain the best performance, if there are 16 cores per node, then
-        mpirun -np XX --map-by ppr:2:node:pe=16 ./your_program ...
-with num_threads=8 will initialize 2 processors in each node and each processor will utilize 8 threads in the OpenMP sections.
+	mpirun -np XX --map-by ppr:2:node:pe=8 ./your_program ...
+with num_threads=8 will initialize 2 processors in each node and each processor will utilize 8 threads in the OpenMP sections. In this way, the entire node is fully utilized.
 Processor 0: Finish clump finding for t = 215.001, found 12 clumps;  Mp_max = 0.000331565, Mp_tot = 0.00113912(56.805420%) in code units.
 Processor 1: Finish clump finding for t = 214.001, found 12 clumps;  Mp_max = 0.000367304, Mp_tot = 0.00115491(57.592773%) in code units.
 Max waiting time among all processors due to Barrier(): 8.5939e-05s.
