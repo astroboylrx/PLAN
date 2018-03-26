@@ -157,16 +157,19 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
     if (search != input_paras.end()) {
         num_neighbors_to_hop = static_cast<unsigned int>(search->second);
         progIO->log_info << "# of neighbors in HOP = " << num_neighbors_to_hop << ";" << std::endl;
+        fixed_num_neighbors_to_hop = true;
     }
     search = input_paras.find("num_hop");
     if (search != input_paras.end()) {
         num_neighbors_to_hop = static_cast<unsigned int>(search->second);
         progIO->log_info << "# of neighbors in HOP = " << num_neighbors_to_hop << ";" << std::endl;
+        fixed_num_neighbors_to_hop = true;
     }
     search = input_paras.find("hop");
     if (search != input_paras.end()) {
         num_neighbors_to_hop = static_cast<unsigned int>(search->second);
         progIO->log_info << "# of neighbors in HOP = " << num_neighbors_to_hop << ";" << std::endl;
+        fixed_num_neighbors_to_hop = true;
     }
     CalculateNewParameters();
 
@@ -414,7 +417,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         error_message << "Cannot determine the available resources for OpenMP. Please specify the number of threads , \"num_threads\", in the parameter input file." << std::endl;
         Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
     } else {
-        out_content << "Set the number of available threads for OpenMP to " << numerical_parameters.num_avail_threads << ". " << "This number can also be fixed manually by specify \"num_threads\" in the parameter input file. " << std::endl;
+        out_content << "Set the number of available threads for OpenMP to " << numerical_parameters.num_avail_threads << ". " << "This number can also be fixed manually by specifying \"num_threads\" in the parameter input file. " << std::endl;
 #ifdef MPI_ON
         out_content << "Note that every processor in MPI will utilize such number of threads in its own node. It is recommendeded to use --map-by ppr:n:node in the Hybrid scheme. \nFor example, to obtain the best performance, if there are 16 cores per node, then" << std::endl;
         out_content << "\tmpirun -np XX --map-by ppr:2:node:pe=16 ./your_program ..." << std::endl;

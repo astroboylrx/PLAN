@@ -801,6 +801,7 @@ public:
     /*! \var unsigned int num_neighbors_to_hop
      *  \brief how many neighbors to search while looking for the densest neighbor */
     unsigned int num_neighbors_to_hop {32};
+    bool fixed_num_neighbors_to_hop {false};
 
 #ifdef OpenMP_ON
     /*! \var unsigned int num_avail_threads

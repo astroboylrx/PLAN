@@ -3055,6 +3055,23 @@ public:
 
         uint32_t horizontal_resolution = progIO->numerical_parameters.box_resolution[0] * progIO->numerical_parameters.box_resolution[1];
         if (ds.particle_set.num_particles >= 4 * horizontal_resolution) {
+            if (!progIO->numerical_parameters.fixed_num_neighbors_to_hop) {
+                if (ds.particle_set.num_particles >= 1.67e7) { // 4096^2=16777216
+                    progIO->numerical_parameters.num_neighbors_to_hop = 64;
+                } else if (ds.particle_set.num_particles >= 2.68e8) { // 16384^2=268435456
+                    progIO->numerical_parameters.num_neighbors_to_hop = 128;
+                }
+            } else {
+                if (ds.particle_set.num_particles >= 1.67e7 &&
+                    progIO->numerical_parameters.num_neighbors_to_hop < 64) {
+                    progIO->log_info << "The number of particles retrieved from data is quite a lot, " << ds.particle_set.num_particles << ", you may want to set a larger num_neighbors_to_hop by specifying \"hop\" in the parameter input file (current value is " << progIO->numerical_parameters.num_neighbors_to_hop << ")." << std::endl;
+                    progIO->Output(std::cout, progIO->log_info, __normal_output, __master_only);
+                } else if (ds.particle_set.num_particles >= 2.68e8 &&
+                    progIO->numerical_parameters.num_neighbors_to_hop < 128) {
+                    progIO->log_info << "The number of particles retrieved from data is quite a lot, " << ds.particle_set.num_particles << ", you may want to set a larger num_neighbors_to_hop by specifying \"hop\" in the parameter input file (current value is " << progIO->numerical_parameters.num_neighbors_to_hop << ")." << std::endl;
+                    progIO->Output(std::cout, progIO->log_info, __normal_output, __master_only);
+                }
+            }
             enough_particle_resolution_flag = 1;
             FindPlanetesimals(ds, BHtree<dim>::MedianSphericalDensityKernel<float>, loop_count);
         } else if (ds.particle_set.num_particles >= horizontal_resolution) {
