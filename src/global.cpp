@@ -407,21 +407,30 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
 
 #ifdef OpenMP_ON
     if (numerical_parameters.num_avail_threads == 0) {
-        numerical_parameters.num_avail_threads = std::thread::hardware_concurrency();
-        if (numerical_parameters.num_avail_threads == 0) { // std::thread still cannot obtain the available resources
-            // use system functions in Linux & MacOS
-            numerical_parameters.num_avail_threads = static_cast<unsigned int>(sysconf(_SC_NPROCESSORS_ONLN));
+        unsigned int OMP_NUM_THREADS = 0;
+        if (const char* env_info = std::getenv("OMP_NUM_THREADS")) {
+            OMP_NUM_THREADS = static_cast<unsigned int>(atoi(env_info));
+        }
+        if (OMP_NUM_THREADS > 0) {
+            numerical_parameters.num_avail_threads = OMP_NUM_THREADS;
+        } else {
+            numerical_parameters.num_avail_threads = std::thread::hardware_concurrency();
+            if (numerical_parameters.num_avail_threads == 0) { // std::thread still cannot obtain the available resources
+                // use system functions in Linux & MacOS
+                numerical_parameters.num_avail_threads = static_cast<unsigned int>(sysconf(_SC_NPROCESSORS_ONLN));
+            }
         }
     }
+
     if (numerical_parameters.num_avail_threads == 0) {
-        error_message << "Cannot determine the available resources for OpenMP. Please specify the number of threads , \"num_threads\", in the parameter input file." << std::endl;
+        error_message << "Cannot determine the available resources for OpenMP. Please specify the number of threads, \"num_threads\", in the parameter input file." << std::endl;
         Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
     } else {
         out_content << "Set the number of available threads for OpenMP to " << numerical_parameters.num_avail_threads << ". " << "This number can also be fixed manually by specifying \"num_threads\" in the parameter input file. " << std::endl;
 #ifdef MPI_ON
         out_content << "Note that every processor in MPI will utilize such number of threads in its own node. It is recommendeded to use --map-by ppr:n:node in the Hybrid scheme. \nFor example, to obtain the best performance, if there are 16 cores per node, then" << std::endl;
-        out_content << "\tmpirun -np XX --map-by ppr:2:node:pe=16 ./your_program ..." << std::endl;
-        out_content << "with num_threads=8 will initialize 2 processors in each node and each processor will utilize 8 threads in the OpenMP sections." << std::endl;
+        out_content << "\tmpirun -np XX --map-by ppr:2:node:pe=8 ./your_program ..." << std::endl;
+        out_content << "with num_threads=8 will initialize 2 processors in each node and each processor will utilize 8 threads in the OpenMP sections. In this way, the entire node is fully utilized." << std::endl;
 #endif
         Output(std::cout, out_content, __normal_output, __master_only);
     }
