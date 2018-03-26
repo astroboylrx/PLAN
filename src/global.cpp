@@ -43,7 +43,6 @@ void NumericalParameters::CalculateNewParameters()
     shear_speed = q * Omega * box_length[0];
 
     min_trusted_mass_code_unit = 3 * pow(cell_length[0], 3) * Omega*Omega / rho_g0 / grav_constant;
-
 }
 
 /*! \fn void ReadNumericalParameters(std::string filename)
@@ -95,7 +94,7 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
 
     auto search = input_paras.find("Z");
     if (search != input_paras.end()) {
-        progIO->numerical_parameters.solid_to_gas_ratio = search->second;
+        solid_to_gas_ratio = search->second;
     }
 
     for (int i = 1; i != dim+1; i++) {
@@ -103,30 +102,74 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
         tmp_str += std::to_string(i);
         search = input_paras.find(tmp_str);
         if (search != input_paras.end()) {
-            progIO->numerical_parameters.box_resolution[i-1] = static_cast<unsigned int>(search->second);
+            box_resolution[i-1] = static_cast<unsigned int>(search->second);
         }
     }
     search = input_paras.find("four_pi_G_par");
     if (search != input_paras.end()) {
-        progIO->numerical_parameters.four_PI_G = search->second;
+        four_PI_G = search->second;
     }
-    search = input_paras.find("num_peaks");
-    if (search != input_paras.end()) {
-        progIO->numerical_parameters.num_peaks = static_cast<unsigned int>(search->second);
-    }
-    search = input_paras.find("num_peak"); // in case it is not plural
-    if (search != input_paras.end()) {
-        progIO->numerical_parameters.num_peaks = static_cast<unsigned int>(search->second);
-    }
-
-    CalculateNewParameters();
-
     progIO->log_info << "Reading input numerical parameters:" << std::endl;
     progIO->log_info << "Solid to gas ratio (Z) = " << solid_to_gas_ratio << ";" << std::endl;
     progIO->log_info << "Resolution Nx = [";
     std::copy(box_resolution.data, box_resolution.data+dim, std::ostream_iterator<unsigned int>(progIO->log_info, ", "));
     progIO->log_info << "];" << std::endl;
     progIO->log_info << "four_pi_G_par = " << four_PI_G << ";" << std::endl;
+
+#ifdef OpenMP_ON
+    search = input_paras.find("omp_threads");
+    if (search != input_paras.end()) {
+        num_avail_threads = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of threads for OpenMP = " << num_avail_threads << ";" << std::endl;
+    }
+    search = input_paras.find("num_threads");
+    if (search != input_paras.end()) {
+        num_avail_threads = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of threads for OpenMP = " << num_avail_threads << ";" << std::endl;
+    }
+#endif
+    search = input_paras.find("num_peaks");
+    if (search != input_paras.end()) {
+        num_peaks = static_cast<unsigned int>(search->second);
+        progIO->log_info << "Maximum # of clumps to output  = " << num_peaks << " (0 means no limit);" << std::endl;
+    }
+    search = input_paras.find("num_peak"); // in case it is not plural
+    if (search != input_paras.end()) {
+        num_peaks = static_cast<unsigned int>(search->second);
+        progIO->log_info << "Maximum # of clumps to output  = " << num_peaks << " (0 means no limit);" << std::endl;
+    }
+    search = input_paras.find("num_neighbors_in_knn_search");
+    if (search != input_paras.end()) {
+        num_neighbors_in_knn_search = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of neighbors in KNN search = " << num_neighbors_in_knn_search << ";" << std::endl;
+    }
+    search = input_paras.find("num_knn");
+    if (search != input_paras.end()) {
+        num_neighbors_in_knn_search = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of neighbors in KNN search = " << num_neighbors_in_knn_search << ";" << std::endl;
+    }
+    search = input_paras.find("knn");
+    if (search != input_paras.end()) {
+        num_neighbors_in_knn_search = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of neighbors in KNN search = " << num_neighbors_in_knn_search << ";" << std::endl;
+    }
+    search = input_paras.find("num_neighbors_to_hop");
+    if (search != input_paras.end()) {
+        num_neighbors_to_hop = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of neighbors in HOP = " << num_neighbors_to_hop << ";" << std::endl;
+    }
+    search = input_paras.find("num_hop");
+    if (search != input_paras.end()) {
+        num_neighbors_to_hop = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of neighbors in HOP = " << num_neighbors_to_hop << ";" << std::endl;
+    }
+    search = input_paras.find("hop");
+    if (search != input_paras.end()) {
+        num_neighbors_to_hop = static_cast<unsigned int>(search->second);
+        progIO->log_info << "# of neighbors in HOP = " << num_neighbors_to_hop << ";" << std::endl;
+    }
+    CalculateNewParameters();
+
     progIO->Output(std::clog, progIO->log_info, __more_output, __master_only);
     progIO->PrintStars(std::clog, __more_output);
 }
@@ -356,8 +399,30 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
     physical_quantities.resize(num_files);
     GenerateFilenames();
     if (!file_name.input_const_path.empty()) {
-        progIO->numerical_parameters.ReadNumericalParameters(file_name.input_const_path);
+        numerical_parameters.ReadNumericalParameters(file_name.input_const_path);
     }
+
+#ifdef OpenMP_ON
+    if (numerical_parameters.num_avail_threads == 0) {
+        numerical_parameters.num_avail_threads = std::thread::hardware_concurrency();
+        if (numerical_parameters.num_avail_threads == 0) { // std::thread still cannot obtain the available resources
+            // use system functions in Linux & MacOS
+            numerical_parameters.num_avail_threads = static_cast<unsigned int>(sysconf(_SC_NPROCESSORS_ONLN));
+        }
+    }
+    if (numerical_parameters.num_avail_threads == 0) {
+        error_message << "Cannot determine the available resources for OpenMP. Please specify the number of threads , \"num_threads\", in the parameter input file." << std::endl;
+        Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+    } else {
+        out_content << "Set the number of available threads for OpenMP to " << numerical_parameters.num_avail_threads << ". " << "This number can also be fixed manually by specify \"num_threads\" in the parameter input file. " << std::endl;
+#ifdef MPI_ON
+        out_content << "Note that every processor in MPI will utilize such number of threads in its own node. It is recommendeded to use --map-by ppr:n:node in the Hybrid scheme. \nFor example, to obtain the best performance, if there are 16 cores per node, then" << std::endl;
+        out_content << "\tmpirun -np XX --map-by ppr:2:node:pe=16 ./your_program ..." << std::endl;
+        out_content << "with num_threads=8 will initialize 2 processors in each node and each processor will utilize 8 threads in the OpenMP sections." << std::endl;
+#endif
+        Output(std::cout, out_content, __normal_output, __master_only);
+    }
+#endif
     
     return 0;
 }
@@ -737,7 +802,15 @@ double Timer::GetCurrentTime()
 #ifdef MPI_ON
     return MPI_Wtime();
 #else // MPI_ON
-    return double(clock())/CLOCKS_PER_SEC;
+    //return double(clock())/CLOCKS_PER_SEC;
+    // clock() gives cpu time instead of wall-clock time
+
+    using namespace std::chrono;
+    auto now = system_clock::now();
+    auto now_ms = time_point_cast<milliseconds>(now);
+
+    auto value = now_ms.time_since_epoch();
+    return static_cast<double>(value.count())/1.0e3;
 #endif // MPI_ON
 }
 

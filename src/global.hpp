@@ -24,7 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
-#include <chrono> // todo: use this instead of ctime in Timer class
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -47,8 +47,20 @@
 #include <getopt.h>
 #include <unistd.h>
 
+// "ifdef" options are defined during compilation
+#ifdef Hybrid
+#define OpenMP_ON
+#define MPI_ON
+#endif
+
+//#define OpenMP_ON // Comment out this line before committing!!
+#ifdef OpenMP_ON
+#include <thread>
+#include <omp.h>
+#endif // OpenMP_ON
+
 //#define MPI_ON // Comment out this line before committing!!
-#ifdef MPI_ON // "ifdef" options are defined during compilation
+#ifdef MPI_ON
 #include "mpi.h"
 #endif // MPI_ON
 
@@ -718,6 +730,10 @@ public:
      *  \brief inverse time unit */
     double Omega {1.0};
 
+    /*! \var shear_vector
+     *  \brief vector for shear motion (0, q*Omega, 0) */
+    SmallVec<double, dim> shear_vector {SmallVec<double, dim>(0., q * Omega, 0.)};
+
     /*! \var double Omega_squared
      *  \brief Omega^2 */
     double Omega_squared {Omega*Omega};
@@ -785,6 +801,12 @@ public:
     /*! \var unsigned int num_neighbors_to_hop
      *  \brief how many neighbors to search while looking for the densest neighbor */
     unsigned int num_neighbors_to_hop {32};
+
+#ifdef OpenMP_ON
+    /*! \var unsigned int num_avail_threads
+     *  \brief the number of available threads for OpenMP to use */
+    unsigned int num_avail_threads {0};
+#endif
 
     /*! \var unsigned int num_peaks
      *  \brief the maximum number of clumps/peaks to OUTPUT */

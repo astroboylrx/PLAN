@@ -342,9 +342,9 @@ void BasicAnalysesPostWork();
 template <class T, int D>
 void MinDistanceBetweenParticles(DataSet<T, D> &ds, int loop_count)
 {
-    if (!progIO->flags.basic_analyses_flag) {
-        return;
-    }
+    //if (!progIO->flags.basic_analyses_flag) {
+    //    return;
+    //}
     
     double min_distance = progIO->numerical_parameters.max_half_width, tmp_min_distance = 0;
     uint32_t indices[3];
@@ -359,28 +359,181 @@ void MinDistanceBetweenParticles(DataSet<T, D> &ds, int loop_count)
 template <class T, int D>
 void TempCalculation(DataSet<T, D> &ds, int loop_count)
 {
-    // RL: debug use, output simple POINT3D vtk file for ParaView to visualize
-    std::ofstream file_lis2vtk;
+    std::string ori_lis_file_name;
+    if (progIO->flags.combined_flag) {
+        ori_lis_file_name = *(progIO->file_name.lis_data_file_name.begin()+loop_count*progIO->num_cpus);
+    } else {
+        ori_lis_file_name = *(progIO->file_name.lis_data_file_name.begin()+loop_count);
+    }
 
-    file_lis2vtk.open("/Users/rixin/Downloads/test_old.vtk", std::ofstream::out);
+    // RL: debug use, output particles by reading particle id from an external file
+    /*
+    std::ifstream close_b("../731756.txt", std::ifstream::in);
+    if (!close_b.is_open()) {
+        std::cout << "Failed to open close_binaries.txt" << std::endl;
+        return;
+    }
+    std::vector<uint32_t> indices;
+    uint32_t tmp_idx;
+    double tmp_useless;
+    while (!close_b.eof()) {
+        close_b >> tmp_idx;
+        indices.push_back(tmp_idx);
+        for (auto i = 0; i != 7; i++) {
+            close_b >> tmp_useless;
+        }
+    }
+    close_b.close();
+    std::cout << "Collected " << indices.size() << " particle indices." << std::endl;
+
+    std::sort(ds.particle_set.particles, ds.particle_set.particles+ds.particle_set.num_particles, [](const Particle<D> &a, const Particle<D> &b) {
+        return a.id < b.id;
+    });
+    ds.planetesimal_list.OutputParticles("former_731756.txt", indices, ds.particle_set);
+    //*/
+
+    // RL: debug use, output simple POINT3D vtk file for ParaView to visualize
+    /*
+    std::ofstream file_lis2vtk;
+    file_lis2vtk.open(ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "vtk", std::ofstream::out);
     if (!file_lis2vtk.is_open()) {
-        std::cout << "Failed to open test.vtk" << std::endl;
+        std::cout << "Failed to open vtk file" << std::endl;
         return;
     }
 
     file_lis2vtk << "# vtk DataFile Version 3.0\n";
-    file_lis2vtk << "test vtk file from t=45.8" << "\n";
+    file_lis2vtk << "test vtk file from t="+std::to_string(ds.particle_set.time) << "\n";
     file_lis2vtk << "ASCII\n";
     file_lis2vtk << "DATASET UNSTRUCTURED_POINTS\n";
     file_lis2vtk << "POINTS " << ds.particle_set.num_particles << " float\n";
-
-    for (unsigned int i = 0; i != ds.particle_set.num_particles; i++) {
-        if (ds.particle_set[i].pos[0] > 2e-2 && ds.particle_set[i].pos[0] < 3e-2 && ds.particle_set[i].pos[1] > 7.5e-2 && ds.particle_set[i].pos[1] < 8.5e-2 && ds.particle_set[i].pos[2] > -1e-2 && ds.particle_set[i].pos[2] < 1e-2)
+    unsigned long sampling_interval = 1;
+    for (unsigned long i = 0; i < ds.particle_set.num_particles; i += sampling_interval) {
         file_lis2vtk << ds.particle_set[i].pos[0] << " " << ds.particle_set[i].pos[1] << " " << ds.particle_set[i].pos[2] << "\n";
     }
+
+    //file_lis2vtk << "POINTS " << indices.size() << " float\n";
+    //std::sort(ds.particle_set.particles, ds.particle_set.particles+ds.particle_set.num_particles, [](const Particle<D> &a, const Particle<D> &b) {
+    //    return a.id < b.id;
+    //});
+    //for (auto i : indices) {
+    //    file_lis2vtk << ds.particle_set[i].pos[0] << " " << ds.particle_set[i].pos[1] << " " << ds.particle_set[i].pos[2] << "\n";
+    //}
+
     file_lis2vtk.close();
     //*/
-    
+
+    // RL: debug use, output Sigma_p
+    /*
+    std::string Sigma_p_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "Sigma_p.txt";
+    std::ofstream file_Sigma_p(Sigma_p_file_name, std::ofstream::out);
+    if (!file_Sigma_p.is_open()) {
+        std::cout << "Failed to open Sigma_p.txt" << std::endl;
+        return;
+    }
+
+    VtkDataScalar<T, 3> tmp_rhop = VtkDataScalar<T, 3>();
+    for (int i = 2; i >= 0; i--) {
+        tmp_rhop.num_cells[i] = progIO->numerical_parameters.box_resolution[i];
+        tmp_rhop.shape[i] = progIO->numerical_parameters.box_resolution[dim-1-i];
+    }
+    tmp_rhop.data.resize(tmp_rhop.shape);
+
+    Particle<D> *p;
+    SmallVec<int, 3> tmp_index;
+    for (uint32_t i = 0; i < ds.particle_set.num_particles; i++) {
+        p = &ds.particle_set.particles[i];
+        for (int j = 0; j != D; j++) {
+            tmp_index[j] = static_cast<int>(std::floor((p->pos[j] - progIO->numerical_parameters.box_min[j]) / progIO->numerical_parameters.cell_length[j]));
+        }
+        if (tmp_index[2] >= progIO->numerical_parameters.box_resolution[2]) {
+            continue;
+        }
+        tmp_rhop.data[tmp_index[2]][tmp_index[1]][tmp_index[0]] = p->density;
+    }
+
+    file_Sigma_p << std::scientific;
+    for (auto iy = 0; iy != tmp_rhop.num_cells[1]; iy++) {
+        for (auto ix = 0; ix != tmp_rhop.num_cells[0]; ix++) {
+            double Sigma_p = 0;
+            typename VtkDataScalar<T, D>::template view_r2d_type<> column_density(tmp_rhop.data[boost::indices[sn::b_range()][iy][ix]]);
+            ds.vtk_data.IterateBoostMultiArrayConcept(column_density, [&Sigma_p](float &element)->void {
+                Sigma_p += element;
+            });
+            file_Sigma_p << std::setw(16) << std::setprecision(8) << Sigma_p;
+        }
+        file_Sigma_p << std::endl;
+    }
+    file_Sigma_p.close();
+
+    //*/
+
+    // RL: debug use, output sub-sampled lis file for fast analyses
+    /*
+    std::ofstream file_subsample;
+    unsigned long sampling_in_each_cpu = 4096;
+    std::string new_lis_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("all")) + "sub.lis";
+    std::cout << "Sub-sampling to " << new_lis_file_name << std::endl;
+    file_subsample.open(new_lis_file_name, std::ios::binary);
+    if (file_subsample.is_open()) {
+        int tmp_int;
+        long tmp_num_particles, tmp_long;
+        float tmp_float_value, tmp_float_vector[D];
+        for (int i = 0; i != 12; i++) {
+            tmp_float_value = static_cast<float>(ds.particle_set.coor_lim[i]);
+            file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+        }
+        file_subsample.write(reinterpret_cast<char*>(&ds.particle_set.num_types), sizeof(int));
+        for (unsigned int i = 0; i != ds.particle_set.num_types; i++) {
+            tmp_float_value = static_cast<float>(ds.particle_set.type_info[i]);
+            file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+        }
+        tmp_float_value = static_cast<float>(ds.particle_set.time);
+        file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+        tmp_float_value = static_cast<float>(ds.particle_set.dt);
+        file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+
+        Particle<D> *p;
+        uint32_t num_particles_to_output = 0;
+        for (uint32_t i = 0; i < ds.particle_set.num_particles; i += 1) {
+            p = &ds.particle_set.particles[i];
+            if (p->id_in_run < sampling_in_each_cpu) {
+                num_particles_to_output++;
+            }
+        }
+        std::cout << "We will subsample " << num_particles_to_output << " particles. " << std::endl;
+
+        tmp_num_particles = static_cast<long>(num_particles_to_output);
+        file_subsample.write(reinterpret_cast<char*>(&tmp_num_particles), sizeof(long));
+
+        size_t D_float = D * sizeof(float);
+        size_t one_float = sizeof(float);
+        size_t one_int = sizeof(int);
+        size_t one_long = sizeof(long);
+
+        for (uint32_t i = 0; i < ds.particle_set.num_particles; i += 1) {
+            p = &ds.particle_set.particles[i];
+            if (p->id_in_run < sampling_in_each_cpu) {
+                for (int i = 0; i != D; i++) {
+                    tmp_float_vector[i] = static_cast<float>(p->pos[i]);
+                }
+                file_subsample.write(reinterpret_cast<char *>(&tmp_float_vector), D_float);
+                for (int i = 0; i != D; i++) {
+                    tmp_float_vector[i] = static_cast<float>(p->vel[i]);
+                }
+                file_subsample.write(reinterpret_cast<char *>(&tmp_float_vector), D_float);
+                tmp_float_value = static_cast<float>(p->density);
+                file_subsample.write(reinterpret_cast<char *>(&tmp_float_value), one_float);
+
+                file_subsample.write(reinterpret_cast<char *>(&p->property_index), one_int);
+                tmp_long = static_cast<long>(p->id_in_run);
+                file_subsample.write(reinterpret_cast<char *>(&tmp_long), one_long);
+                tmp_int = static_cast<int>(p->cpu_id);
+                file_subsample.write(reinterpret_cast<char *>(&tmp_int), one_int);
+            }
+        }
+    }
+    file_subsample.close();
+    //*/
 };
 
 #endif /* analyses_hpp */
