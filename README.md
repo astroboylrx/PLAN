@@ -4,8 +4,9 @@ PLanetesimal ANalyzer (`PLAN`) is designed to identify and characterize planetes
 `PLAN` now works with two types of data: VTK (dumps of primitive variables in grids) and LIS (a list of individual particles). The latter one is used to build [Barnes-Hut tree](https://doi.org/10.1038/324446a0) from 3D particle data. `PLAN` then finds planetesimals with the [HOP](https://doi.org/10.1086/305535) method. Also, analyzing & manipulating grid-based data is supported by `PLAN`'s VTK module (utilizing Boost MultiDimensional Array Library)
 
 ## Compile & Run
-CMake is needed to generate a Makefile and compile this program. Boost headers are also required.  
-You may just run `cmake` and `make` to build PLAN.
+CMake is needed to generate a Makefile and compile this program. Boost headers are also required. `PLAN` can be accelerated with MPI and OpenMP.
+
+You may just run `cmake` and `make` to build `PLAN`.
 
 ```shell
 ➜  PLAN $ ls
@@ -57,7 +58,7 @@ Scanning dependencies of target plan
 CMakeCache.txt      CMakeFiles          Makefile            cmake_install.cmake plan
 ```
 
-You can specify the environment variables `CC` and `CXX` to tell cmake which compilers to use. In addition, three options are available to build PLAN with MPI and/or OpenMP.
+You can specify the environment variables `CC` and `CXX` to tell cmake which compilers to use. In addition, three options are available to build `PLAN` with MPI and/or OpenMP.
 
 ```shell
 ➜  build $ rm -rf ./*
