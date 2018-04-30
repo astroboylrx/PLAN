@@ -1,5 +1,5 @@
 # PLAN
-PLanetesimal ANalyzer (`PLAN`) is designed to identify and characterize planetesimals in numerical simulations of the Streaming Instability ([Youdin et al. 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai et al. 2010](https://doi.org/10.1088/0067-0049/190/2/297)]). 
+PLanetesimal ANalyzer (`PLAN`) is designed to identify and characterize planetesimals in numerical simulations of the Streaming Instability ([Youdin et al. 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai et al. 2010](https://doi.org/10.1088/0067-0049/190/2/297)). 
 
 `PLAN` now works with two types of data: VTK (dumps of primitive variables in grids) and LIS (a list of individual particles). The latter one is used to build [Barnes-Hut tree](https://doi.org/10.1038/324446a0) from 3D particle data. `PLAN` then finds planetesimals with the [HOP](https://doi.org/10.1086/305535) method. Also, analyzing & manipulating grid-based data is supported by `PLAN`'s VTK module (utilizing Boost MultiDimensional Array Library)
 
