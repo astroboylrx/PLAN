@@ -717,10 +717,15 @@ public:
      *  \brief cell volume, default 0.0015625^3 */
     double cell_volume {0.0015625*0.0015625*0.0015625};
 
-    /*! \var double ghost_zone_width {0.025}
+    /*! \var SmallVec<double, dim> ghost_zone_width {SmallVec<double, dim>(0.025)}
+     *  \brief width of the ghost zone, default (0.025, 0.025, 0.025)
+     *  Since planetesimal's size usually < 0.025H, we adopt this number. A smaller number may be chosen. */
+    SmallVec<double, dim> ghost_zone_width {SmallVec<double, dim>(0.025)};
+
+    /*! \var double max_ghost_zone_width {0.025}
      *  \brief width of the ghost zone
      *  Since planetesimal's size usually < 0.025H, we adopt this number. A smaller number may be chosen. */
-    double ghost_zone_width {0.025};
+    double max_ghost_zone_width {0.025};
     
     /*! \var double q
      *  \brief shearing */
@@ -812,6 +817,10 @@ public:
     /*! \var unsigned int num_peaks
      *  \brief the maximum number of clumps/peaks to OUTPUT */
     unsigned int num_peaks {0};
+
+    /*! \var SmallVec<int, 2> FineSp_Nx {SmallVec<int, dim>(512)}
+     *  \brief resolution for finer Surface density map output */
+    SmallVec<int, 2> FineSp_Nx {SmallVec<int, 2>(512)};
 
     /*! \var double min_trusted_mass_code_unit
      *  \brief the minimum mass of a clump/peak to OUTPUT, determined by R_Hill = cell_length
@@ -979,7 +988,7 @@ public:
     /*! \var int find_clumps_flag
      *  \brief set this flag to find clumps & planetesimals */
     int find_clumps_flag {0};
-    
+
     /*! \var int basic_analyses_flag
      *  \brief set this flag to perform basic data analysis */
     int basic_analyses_flag {0};
@@ -995,6 +1004,10 @@ public:
     /*! \var int tmp_calculation_flag
      *  \brief set this flag to do some temporary calculations */
     int tmp_calculation_flag {0};
+
+    /*! \var int user_defined_box_flag
+     *  \brief this flag will be set if any of x/y/z-limit is set */
+    int user_defined_box_flag {0};
     
     /*! \var int help_flag
      *  \brief set this flag to print out usage information */
@@ -1050,6 +1063,10 @@ public:
     /*! \var int num_cpus
      *  \brief the number of processors used in simulation */
     int num_cpus;
+
+    /*! \var SmallVec<double, dim> user_box_min{0.0}, user_box_max{0.0};
+     *  \brief the range of coordinates to explore */
+    SmallVec<double, dim> user_box_min{0.0}, user_box_max{0.0};
     
     /*! \var int width {15}
      *  \brief set default width of one data unit during output */

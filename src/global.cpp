@@ -31,6 +31,7 @@ void NumericalParameters::CalculateNewParameters()
     max_half_width = 0.0;
     for (int i = 0; i != dim; i++) {
         max_half_width = std::max(max_half_width, box_half_width[i]);
+        max_ghost_zone_width = std::max(max_ghost_zone_width, ghost_zone_width[i]);
     }
 
     cell_length = box_length / box_resolution;
@@ -171,6 +172,17 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
         progIO->log_info << "# of neighbors in HOP = " << num_neighbors_to_hop << ";" << std::endl;
         fixed_num_neighbors_to_hop = true;
     }
+    search = input_paras.find("FineSp_Nx1");
+    if (search != input_paras.end()) {
+        FineSp_Nx[0] = static_cast<int>(search->second);
+        progIO->log_info << "Finer Sigma_p resolution = [" << FineSp_Nx[0] << ", ";
+    }
+    search = input_paras.find("FineSp_Nx2");
+    if (search != input_paras.end()) {
+        FineSp_Nx[1] = static_cast<int>(search->second);
+        progIO->log_info << FineSp_Nx[1] << "];" << std::endl;
+    }
+
     CalculateNewParameters();
 
     progIO->Output(std::clog, progIO->log_info, __more_output, __master_only);
@@ -203,6 +215,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"Verbose", no_argument, &flags.verbose_flag, 1},
         {"Combined", no_argument, &flags.combined_flag, 1},
         {"Find_Clumps", no_argument, &flags.find_clumps_flag, 1},
+        {"No_Ghost", no_argument, &flags.no_ghost_particle_flag, 1},
         {"Basic_Analyses", no_argument, &flags.basic_analyses_flag, 1},
         {"Density_Vs_Scale", no_argument, &flags.density_vs_scale_flag, 1},
         {"Temp_Calculation", no_argument, &flags.tmp_calculation_flag, 1},
@@ -215,6 +228,9 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"file_num", required_argument, nullptr, 'f'},
         {"out_file", required_argument, nullptr, 'o'},
         {"in_const", required_argument, nullptr, 't'},
+        {"xlim", required_argument, nullptr, 'x'},
+        {"ylim", required_argument, nullptr, 'y'},
+        {"zlim", required_argument, nullptr, 'z'},
 #ifdef SMR_ON
         {"level", required_argument, 0, 'l'},
         {"domain", required_argument, 0, 'd'},
@@ -233,7 +249,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
             int option_index = 0;
 #ifndef SMR_ON
             // remember add ":" after the letter means this option has argument after it
-            tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:h", long_options, &option_index);
+            tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:x:y:z:h", long_options, &option_index);
 #else // SMR_ON
             tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:hl:d:", long_options, &option_index);
 #endif // SMR_ON
@@ -323,6 +339,50 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
                 case 't': {
                     file_name.input_const_path.assign(optarg);
                     log_info << "input_const_path is " << file_name.input_const_path << "\n";
+                    break;
+                }
+                case 'x': {
+                    std::istringstream tmp_iss;
+                    char tmp_char;
+                    tmp_iss.str(optarg);
+                    tmp_iss >> user_box_min[0] >> tmp_char >> user_box_max[0];
+                    if (user_box_min[0] > user_box_max[0]) {
+                        double tmp = user_box_min[0];
+                        user_box_min[0] = user_box_max[0];
+                        user_box_max[0] = tmp;
+                    }
+                    log_info << "user-defined x limit is (" << user_box_min[0] << ", " << user_box_max[0] << ")\n";
+                    flags.user_defined_box_flag = 1;
+                    break;
+                }
+                case 'y': {
+                    std::istringstream tmp_iss;
+                    char tmp_char;
+                    tmp_iss.str(optarg);
+                    tmp_iss >> user_box_min[1] >> tmp_char >> user_box_max[1];
+                    if (user_box_min[1] > user_box_max[1]) {
+                        double tmp = user_box_min[1];
+                        user_box_min[1] = user_box_max[1];
+                        user_box_max[1] = tmp;
+                    }
+                    log_info << "user-defined y limit is (" << user_box_min[1] << ", " << user_box_max[1] << ")\n";
+                    flags.user_defined_box_flag = 1;
+                    break;
+                }
+                case 'z': {
+                    if (dim > 2) {
+                        std::istringstream tmp_iss;
+                        char tmp_char;
+                        tmp_iss.str(optarg);
+                        tmp_iss >> user_box_min[2] >> tmp_char >> user_box_max[2];
+                        if (user_box_min[2] > user_box_max[2]) {
+                            double tmp = user_box_min[2];
+                            user_box_min[2] = user_box_max[2];
+                            user_box_max[2] = tmp;
+                        }
+                        log_info << "user-defined z limit is (" << user_box_min[2] << ", " << user_box_max[2] << ")\n";
+                        flags.user_defined_box_flag = 1;
+                    }
                     break;
                 }
                 case 'h':{
@@ -444,7 +504,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
 void Basic_IO_Operations::PrintUsage(const char *program_name)
 {
     out_content << "USAGE: \n" << program_name
-    << " -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> --flags]\n"
+    << " -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> -x -0.1,0.1 -y -0.05,0.05 --flags]\n"
     << "Example: ./plan -c 64 -i ./bin/ -b Par_Strat3d -p ds -f 170:227 -o result.txt -t plan_input.txt --Verbose --Find_Clumps\n"
     << "[...] means optional arguments. Available flags: \n"
     << "Use --Help to obtain this usage information\n"
@@ -452,6 +512,7 @@ void Basic_IO_Operations::PrintUsage(const char *program_name)
     << "Use --Debug to obtain all possible output during execution\n"
     << "Use --Combined to deal with combined lis files (from all processors)\n"
     << "Use --Find_Clumps to run clump finding functions\n"
+    << "Use --No_Ghost to skip making ghost particles\n"
     << "Use --Basic_Analyses to perform basic analyses, which will output max($\\rho_p$) and $H_p$\n"
     << "Use --Density_Vs_Scale to calculate max($\\rho_p$) as a function of length scales\n"
     << "Use --Temp_Calculation to do temporary calculations in TempCalculation()\n"

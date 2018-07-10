@@ -1182,7 +1182,7 @@ public:
     
     /*! \fn Particle<D>& operator = (const Particle &rhs)
      *  \brief assignment operator = */
-    Particle<D>& operator = (const Particle &rhs) {
+    Particle<D>& operator = (const Particle<D> &rhs) {
         pos = rhs.pos;
         vel = rhs.vel;
         property_index = rhs.property_index;
@@ -1557,8 +1557,45 @@ public:
                 progIO->numerical_parameters.mass_per_particle[i] = progIO->numerical_parameters.mass_fraction_per_species[i] * progIO->numerical_parameters.mass_total_code_units / num_particles;
             }
         }
+
+        if (progIO->flags.user_defined_box_flag) {
+            for (int i = 0; i != dim; i++) {
+                if (progIO->user_box_min[i] == 0 && progIO->user_box_max[i] == 0) {
+                    progIO->user_box_min[i] = progIO->numerical_parameters.box_min[i];
+                    progIO->user_box_max[i] = progIO->numerical_parameters.box_max[i];
+                }
+            }
+            if (progIO->numerical_parameters.box_min.InRange(progIO->user_box_min, progIO->user_box_max) && progIO->numerical_parameters.box_max.InRange(progIO->user_box_min, progIO->user_box_max)) {
+                progIO->log_info << "User-defined coordinate limits are beyond the original box. Nothing to do." << std::endl;
+            } else {
+                progIO->log_info << "User-defined coordinate limits are in effect: min = " << progIO->user_box_min << "; max = " << progIO->user_box_max << ". Turning on No_Ghost flag is recommended. ";
+
+                Particle<D> *user_selected_particles;
+                user_selected_particles = new Particle<D>[num_particles];
+                uint32_t num_user_selected_particles = 0;
+                for (uint32_t i = 0; i != num_particles; i++) {
+                    if (particles[i].pos.InRange(progIO->user_box_min, progIO->user_box_max)) {
+                        user_selected_particles[num_user_selected_particles] = particles[i];
+                        num_user_selected_particles++;
+                    }
+                }
+
+                progIO->log_info << num_user_selected_particles << " particles are picked out. ";
+
+                Reset();
+                AllocateSpace(num_user_selected_particles);
+                std::memcpy(particles, user_selected_particles, sizeof(Particle<D>)*num_user_selected_particles);
+
+                num_particles = num_user_selected_particles;
+                num_total_particles = num_particles;
+
+                delete [] user_selected_particles;
+                user_selected_particles = nullptr;
+            }
+            progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
+        }
     }
-    
+
     /*! \fn void MakeGhostParticles(const NumericalParameters &paras)
      *  \brief make ghost particles for ghost zone based on ghost zone size
      *  Note this function assumes we are dealing with 3D data. We can implement more if there are other situations. */
@@ -1570,7 +1607,7 @@ public:
         Particle<D> *ghost_particles = new Particle<D>[3*num_particles]; // The worst case is that one particle has three ghost partners, under the assumption that we don't use periodic boundary conditions for the vertical direction.
         uint32_t tmp_id = num_particles, ghost_id = 0;
         
-        dvec non_ghost_width = paras.box_half_width - dvec(paras.ghost_zone_width);
+        dvec non_ghost_width = paras.box_half_width - paras.ghost_zone_width;
         for (int i = 0; i != D; i++) {
             if (non_ghost_width[i] < 0) {
                 non_ghost_width[i] = 0;
@@ -1650,7 +1687,7 @@ public:
         std::memcpy(particles+num_particles, ghost_particles, sizeof(Particle<D>)*num_ghost_particles);
         
         /* this is a small check for ghost particles
-        dvec box_limit = paras.box_max + dvec(paras.ghost_zone_width);
+        dvec box_limit = paras.box_max + paras.ghost_zone_width;
         for (uint32_t i = num_ghost_particles; i != num_total_particles; i++) {
             assert (particles[i].pos <= box_limit);
         }
@@ -1662,6 +1699,191 @@ public:
         delete [] tmp_particles;
         tmp_particles = nullptr;
 
+    }
+
+    /*! \fn void MakeFinerSurfaceDensityMap(const int Nx, const int Ny)
+     *  \brief output the solid surface density with finer resolution */
+    double** MakeFinerSurfaceDensityMap(const int Nx, const int Ny) {
+        double **Sigma_ghost = nullptr;
+        double tmp_Sigma[Ny+4][Nx+4] = {0.0}; // 1 more cell each side as ghost zones
+        double ccx[Nx+4], ccy[Ny+4], tmp, idx_origin, idy_origin; // cell-center-x/y
+        double dx, dy, inv_dx, inv_dy, dx2, dy2, half_dx, half_dy, three_half_dx, three_half_dy;
+        std::vector<double> sigma_per_particle;
+
+        if (progIO->flags.user_defined_box_flag) {
+            dx = (progIO->user_box_max[0] - progIO->user_box_min[0]) / Nx;
+            dy = (progIO->user_box_max[1] - progIO->user_box_min[1]) / Ny;
+        } else {
+            dx = progIO->numerical_parameters.box_length[0] / Nx;
+            dy = progIO->numerical_parameters.box_length[1] / Ny;
+        }
+
+        inv_dx = 1./dx; dx2 = dx*dx; half_dx = dx/2.; three_half_dx = 1.5*dx;
+        inv_dy = 1./dy; dy2 = dy*dy; half_dy = dy/2.; three_half_dy = 1.5*dy;
+
+        // usually, dx = dy
+        progIO->numerical_parameters.ghost_zone_width = sn::dvec(dx, dy, 0);
+        progIO->numerical_parameters.max_ghost_zone_width = std::max(dx, dy);
+        MakeGhostParticles(progIO->numerical_parameters);
+
+        if (progIO->flags.user_defined_box_flag) {
+            tmp = progIO->user_box_min[0] - 2.5 * dx;
+            idx_origin = progIO->user_box_min[0] - dx; // start from cell 1
+        } else {
+            tmp = progIO->numerical_parameters.box_min[0] - 2.5 * dx; // start from outside
+            idx_origin = progIO->numerical_parameters.box_min[0] - dx; // start from cell 1
+        }
+        std::generate(ccx, ccx+Nx+4, [&tmp, &dx]() {
+            tmp += dx;
+            return tmp;
+        });
+
+        if (progIO->flags.user_defined_box_flag) {
+            tmp = progIO->user_box_min[1] - 2.5 * dy;
+            idy_origin = progIO->user_box_min[1] - dy; // start from cell 1
+        } else {
+            tmp = progIO->numerical_parameters.box_min[1] - 2.5 * dy; // start from outside
+            idy_origin = progIO->numerical_parameters.box_min[1] - dy; // start from cell 1
+        }
+        std::generate(ccy, ccy+Ny+4, [&tmp, &dy]() {
+            tmp += dy;
+            return tmp;
+        });
+
+        sigma_per_particle.resize(num_types);
+        for (unsigned int i = 0; i != num_types; i++) {
+            sigma_per_particle[i] = progIO->numerical_parameters.mass_per_particle[i] / dx / dy;
+        }
+
+#ifndef OpenMP_ON
+        boost::multi_array<double, 2> Sigma_ghost_private;
+        Sigma_ghost_private.resize(boost::extents[Ny+4][Nx+4]);
+        Sigma_ghost = new double *[Ny+4];
+        Sigma_ghost[0] = Sigma_ghost_private.data();
+        for (int i = 1; i != Ny+4; i++) {
+            Sigma_ghost[i] = Sigma_ghost[i-1] + Nx+4;
+        }
+        Particle<D> *p;
+        int idx, idy;
+        double dist, weightx[3], weighty[3];
+#else
+        boost::multi_array<double, 3> Sigma_ghost_private;
+        Sigma_ghost_private.resize(boost::extents[progIO->numerical_parameters.num_avail_threads][Ny+4][Nx+4]);
+
+        omp_set_num_threads(progIO->numerical_parameters.num_avail_threads);
+#pragma omp parallel private(Sigma_ghost)
+        {
+            int omp_myid = omp_get_thread_num();
+            Sigma_ghost = new double *[Ny+4];
+            Sigma_ghost[0] = Sigma_ghost_private.data() + omp_myid * (Ny+4) * (Nx+4);
+            for (int i = 1; i != Ny + 4; i++) {
+                Sigma_ghost[i] = Sigma_ghost[i - 1] + Nx + 4;
+            }
+            Particle<D> *p;
+            int idx, idy;
+            double dist, weightx[3], weighty[3];
+
+#pragma omp for
+#endif
+            for (uint32_t i = 0; i < num_total_particles; i++) {
+                p = &particles[i];
+                idx = static_cast<int>(std::floor((p->pos[0] - idx_origin) * inv_dx));
+                idy = static_cast<int>(std::floor((p->pos[1] - idy_origin) * inv_dy));
+
+                if (progIO->flags.user_defined_box_flag) {
+                    if (idx > Nx+1 || idx < 0) {
+                        continue;
+                    }
+                    if (idy > Ny+1 || idy < 0) {
+                        continue;
+                    }
+                } else {
+                    if (idx == Nx+2) {
+                        idx -= 1; // for exactly surface_max[0]
+                    }
+                    if (idy == Ny+2) {
+                        idy -= 1; // for exactly surface_max[1]
+                    }
+                    if (idx == -1) {
+                        idx = 0; // for exactly surface_min[0]
+                    }
+                    if (idy == -1) {
+                        idy = 0; // for exactly surface_min[1]
+                    }
+                }
+
+                for (int j = 0; j != 3; j++) {
+                    dist = std::abs(p->pos[0] - ccx[idx + j]);
+                    if (dist <= half_dx) {
+                        weightx[j] = 0.75 - dist * dist / dx2;
+                    } else if (dist < three_half_dx) {
+                        weightx[j] = 0.5 * std::pow(1.5 - dist / dx, 2.);
+                    } else {
+                        weightx[j] = 0.;
+                    }
+                    dist = std::abs(p->pos[1] - ccy[idy + j]);
+                    if (dist <= half_dy) {
+                        weighty[j] = 0.75 - dist * dist / dy2;
+                    } else if (dist < three_half_dy) {
+                        weighty[j] = 0.5 * std::pow(1.5 - dist / dy, 2.);
+                    } else {
+                        weighty[j] = 0.;
+                    }
+                }
+
+                // RL: check use
+                //assert(std::abs(weightx[0]+weightx[1]+weightx[2]-1) > 3e-16);
+                //assert(std::abs(weighty[0]+weighty[1]+weighty[2]-1) > 3e-16);
+
+                for (int j = 0; j != 3; j++) {
+                    for (int k = 0; k != 3; k++) {
+                        Sigma_ghost[idy + j][idx + k] +=
+                                sigma_per_particle[p->property_index] * weighty[j] * weightx[k];
+                    }
+                }
+            }
+#ifdef OpenMP_ON
+        }
+#endif
+      std::memcpy(tmp_Sigma[0], Sigma_ghost_private.data(), sizeof(double)*(Ny+4)*(Nx+4));
+#ifdef OpenMP_ON
+        for (unsigned int i = 1; i != progIO->numerical_parameters.num_avail_threads; i++) {
+            std::transform(tmp_Sigma[0], &tmp_Sigma[Ny+3][Nx+4], Sigma_ghost_private.data()+i*(Ny+4)*(Nx+4), tmp_Sigma[0], std::plus<double>());
+        }
+        Sigma_ghost_private.resize(boost::extents[0][0][0]);
+#else
+        Sigma_ghost_private.resize(boost::extents[0][0]);
+#endif
+        double **Sigma_p = new double *[Ny];
+        Sigma_p[0] = new double[Ny * Nx];
+        std::fill(Sigma_p[0], Sigma_p[0] + Ny * Nx, 0.0);
+        std::memcpy(Sigma_p[0], &tmp_Sigma[2][2], sizeof(double)*Nx);
+        for (int i = 1; i != Ny; i++) {
+            Sigma_p[i] = Sigma_p[i - 1] + Nx;
+            std::memcpy(Sigma_p[i], &tmp_Sigma[i+2][2], sizeof(double)*Nx);
+        }
+
+        /*
+        for (int i = 0; i != Ny; i++) {
+            Sigma_p[i][0] += tmp_Sigma[i][Nx+1];
+            Sigma_p[i][Nx-1] += tmp_Sigma[i][0];
+        }
+        for (int i = 0; i != Nx; i++) {
+            Sigma_p[0][i] += tmp_Sigma[Ny+1][i];
+            Sigma_p[Ny-1][i] += tmp_Sigma[0][i];
+        }
+        Sigma_p[0][0] += tmp_Sigma[Ny+1][Nx+1];
+        Sigma_p[Ny-1][Nx-1] += tmp_Sigma[0][0];
+        Sigma_p[0][Nx-1] += tmp_Sigma[Ny+1][0];
+        Sigma_p[Ny-1][0] += tmp_Sigma[0][Nx+1];
+         */
+
+        if (Sigma_ghost != nullptr){
+            delete [] Sigma_ghost;
+            Sigma_ghost = nullptr;
+        }
+
+        return Sigma_p;
     }
     
 };
@@ -2290,7 +2512,7 @@ public:
      *  \brief build tree from particle data */
     void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set, bool quiet=false) { // double underscore here is to avoid confusion with all sorts of members
         Reset();
-        half_width = paras.max_half_width + paras.ghost_zone_width;
+        half_width = paras.max_half_width + paras.max_ghost_zone_width;
         root_center = paras.box_center;
 
         // Since one processor deals with one entire snapshot, so we need to make sure the total number of particles is smaller than MAX(uint32_t). If needed in the future, we may find a way to deploy multiple processors to deal with the data in one single snapshot.
@@ -4698,8 +4920,9 @@ public:
     VtkData<T, D> vtk_data;
     
     /*! \var ParticleSet<D> particle_set
-     *  \brief data about particles */
-    ParticleSet<D> particle_set;
+     *  \brief data about particles
+     *  RL: I found even for 2D simulation, LIS output 3D data (with certain vars=0) */
+    ParticleSet<3> particle_set;
     
     /*! \var BHtree<dim> tree
      *  \brief tree that holds particle data */

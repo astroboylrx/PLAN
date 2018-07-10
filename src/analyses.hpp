@@ -27,7 +27,7 @@ void BasicAnalyses(DataSet<T, D> &ds, int loop_count)
     // N.B. use reference to particle_set to avoid unwanted changes to members in it after calling this function
     
     if (progIO->flags.density_vs_scale_flag) {
-        progIO->numerical_parameters.ghost_zone_width = progIO->numerical_parameters.max_half_width;
+        progIO->numerical_parameters.max_ghost_zone_width = progIO->numerical_parameters.max_half_width;
         ds.tree.max_leaf_size = std::pow(1<<D, 2);
         progIO->flags.no_ghost_particle_flag = 1;
     }
@@ -359,18 +359,20 @@ void MinDistanceBetweenParticles(DataSet<T, D> &ds, int loop_count)
 template <class T, int D>
 void TempCalculation(DataSet<T, D> &ds, int loop_count)
 {
-    std::string ori_lis_file_name;
-    if (progIO->flags.combined_flag) {
+    std::string ori_vtk_file_name, ori_lis_file_name;
+    if (!progIO->flags.combined_flag) {
+        ori_vtk_file_name = *(progIO->file_name.vtk_data_file_name.begin()+loop_count*progIO->num_cpus);
         ori_lis_file_name = *(progIO->file_name.lis_data_file_name.begin()+loop_count*progIO->num_cpus);
     } else {
+        ori_vtk_file_name = *(progIO->file_name.vtk_data_file_name.begin()+loop_count);
         ori_lis_file_name = *(progIO->file_name.lis_data_file_name.begin()+loop_count);
     }
 
     // RL: debug use, output particles by reading particle id from an external file
     /*
-    std::ifstream close_b("../731756.txt", std::ifstream::in);
+    std::ifstream close_b("./red.txt", std::ifstream::in);
     if (!close_b.is_open()) {
-        std::cout << "Failed to open close_binaries.txt" << std::endl;
+        std::cout << "Failed to open red.txt" << std::endl;
         return;
     }
     std::vector<uint32_t> indices;
@@ -379,9 +381,9 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     while (!close_b.eof()) {
         close_b >> tmp_idx;
         indices.push_back(tmp_idx);
-        for (auto i = 0; i != 7; i++) {
-            close_b >> tmp_useless;
-        }
+        //for (auto i = 0; i != 7; i++) {
+        //    close_b >> tmp_useless;
+        //}
     }
     close_b.close();
     std::cout << "Collected " << indices.size() << " particle indices." << std::endl;
@@ -389,26 +391,25 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     std::sort(ds.particle_set.particles, ds.particle_set.particles+ds.particle_set.num_particles, [](const Particle<D> &a, const Particle<D> &b) {
         return a.id < b.id;
     });
-    ds.planetesimal_list.OutputParticles("former_731756.txt", indices, ds.particle_set);
+    ds.planetesimal_list.OutputParticles("red_"+std::to_string(loop_count+progIO->start_num)+".txt", indices, ds.particle_set);
     //*/
 
-    // RL: debug use, output simple POINT3D vtk file for ParaView to visualize
+    // RL: debug use, output simple POINT3D file for ParaView to visualize
     /*
     std::ofstream file_lis2vtk;
     file_lis2vtk.open(ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "vtk", std::ofstream::out);
     if (!file_lis2vtk.is_open()) {
         std::cout << "Failed to open vtk file" << std::endl;
         return;
+    } else {
+        std::cout << "Writing to " << ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "vtk" << std::endl;
     }
 
-    file_lis2vtk << "# vtk DataFile Version 3.0\n";
-    file_lis2vtk << "test vtk file from t="+std::to_string(ds.particle_set.time) << "\n";
-    file_lis2vtk << "ASCII\n";
-    file_lis2vtk << "DATASET UNSTRUCTURED_POINTS\n";
-    file_lis2vtk << "POINTS " << ds.particle_set.num_particles << " float\n";
+    file_lis2vtk << "# POINT3D file from t="+std::to_string(ds.particle_set.time) << "\n";
     unsigned long sampling_interval = 1;
+    file_lis2vtk << std::scientific;
     for (unsigned long i = 0; i < ds.particle_set.num_particles; i += sampling_interval) {
-        file_lis2vtk << ds.particle_set[i].pos[0] << " " << ds.particle_set[i].pos[1] << " " << ds.particle_set[i].pos[2] << "\n";
+        file_lis2vtk << std::setw(15) << ds.particle_set[i].pos[0] << std::setw(15) << ds.particle_set[i].pos[1] << std::setw(15) << ds.particle_set[i].pos[2] << std::setw(8) << ds.particle_set[i].id << "\n"; // << " " << ds.particle_set[i].id
     }
 
     //file_lis2vtk << "POINTS " << indices.size() << " float\n";
@@ -422,13 +423,42 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     file_lis2vtk.close();
     //*/
 
+    /* RL: visualization use, output Sigma_p with custom resolution
+    std::ostringstream time; time.precision(3);
+    time << std::setfill('0') << std::setw(6) << std::fixed << ds.particle_set.time;
+    std::string Finer_Sigma_p_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("lis"))+time.str()+".FSigma_p.txt";
+    std::ofstream file_Finer_Sigma_p(Finer_Sigma_p_file_name, std::ofstream::out);
+    if (!file_Finer_Sigma_p.is_open()) {
+        std::cout << "Failed to open "+Finer_Sigma_p_file_name << std::endl;
+    } else {
+        std::cout << "Writing to " << Finer_Sigma_p_file_name << std::endl;
+    }
+
+    double **Sigma_p = ds.particle_set.MakeFinerSurfaceDensityMap(progIO->numerical_parameters.FineSp_Nx[0], progIO->numerical_parameters.FineSp_Nx[1]);
+    file_Finer_Sigma_p << std::scientific;
+    for (int iy = 0; iy != progIO->numerical_parameters.FineSp_Nx[1]; iy++) {
+        for (int ix = 0; ix != progIO->numerical_parameters.FineSp_Nx[0]; ix++) {
+            file_Finer_Sigma_p << std::setw(16) << std::setprecision(8) << Sigma_p[iy][ix];
+        }
+        file_Finer_Sigma_p << std::endl;
+    }
+    file_Finer_Sigma_p.close();
+    if (Sigma_p != nullptr) {
+        delete [] Sigma_p[0];
+        Sigma_p[0] = nullptr;
+    }
+    delete [] Sigma_p;
+    Sigma_p = nullptr;
+
     // RL: debug use, output Sigma_p
     /*
     std::string Sigma_p_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "Sigma_p.txt";
     std::ofstream file_Sigma_p(Sigma_p_file_name, std::ofstream::out);
     if (!file_Sigma_p.is_open()) {
-        std::cout << "Failed to open Sigma_p.txt" << std::endl;
+        std::cout << "Failed to open "+Sigma_p_file_name << std::endl;
         return;
+    } else {
+        std::cout << "Writing to " << Sigma_p_file_name << std::endl;
     }
 
     VtkDataScalar<T, 3> tmp_rhop = VtkDataScalar<T, 3>();
@@ -534,6 +564,41 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     }
     file_subsample.close();
     //*/
+
+    // RL: test use, output particle densities from vtk
+    /*
+    std::ofstream file_dpar;
+    file_dpar.open(progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/'))+"/dpar.dat", std::ios::binary|std::ios::app);
+    // app (append) Set the stream's position indicator to the end of the stream before each output operation
+    // so cannot go back to a position in ofstream to change content
+
+    size_t one_float = sizeof(float);
+    uint32_t npar_count = 0;
+
+    if (file_dpar.is_open()) {
+        file_dpar.write(reinterpret_cast<char*>(&ds.vtk_data.time), sizeof(double));
+
+        ds.vtk_data.IterateBoostMultiArrayConcept(ds.vtk_data.scalar_data["particle_density"].data, [&npar_count](float &element) ->void {
+            if (element > 0) {
+                npar_count++;
+            }
+        });
+        std::cout << "npar_count = " << npar_count << std::endl;
+        file_dpar.write(reinterpret_cast<char*>(&npar_count), sizeof(uint32_t));
+
+        ds.vtk_data.IterateBoostMultiArrayConcept(ds.vtk_data.scalar_data["particle_density"].data, [&file_dpar, &one_float](float &element) ->void {
+            if (element > 0) {
+                file_dpar.write(reinterpret_cast<char*>(&element), one_float);
+            }
+        });
+        file_dpar << std::endl;
+        file_dpar.close();
+    } else {
+        std::cout << "Cannot open dpar.dat" << std::endl;
+    }
+    //*/
+
+
 };
 
 #endif /* analyses_hpp */
