@@ -423,7 +423,8 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     file_lis2vtk.close();
     //*/
 
-    /* RL: visualization use, output Sigma_p with custom resolution
+    // RL: visualization use, output Sigma_p with custom resolution
+    /*
     std::ostringstream time; time.precision(3);
     time << std::setfill('0') << std::setw(6) << std::fixed << ds.particle_set.time;
     std::string Finer_Sigma_p_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("lis"))+time.str()+".FSigma_p.txt";
@@ -449,6 +450,7 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     }
     delete [] Sigma_p;
     Sigma_p = nullptr;
+    //*/
 
     // RL: debug use, output Sigma_p
     /*

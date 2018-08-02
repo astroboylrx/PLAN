@@ -3749,7 +3749,7 @@ public:
             size_t tmp_num_particles;
             do {
                 tmp_num_particles = it.second.indices.size();
-                it.second.SearchBoundParticlesWithinHillRadius(ds.tree);
+                it.second.SearchBoundParticlesWithinHillRadius(ds.tree, ds.planetesimal_list.density_threshold);
                 it.second.CalculateHillRadius();
             } while (it.second.indices.size() > tmp_num_particles);
         }
@@ -4196,10 +4196,10 @@ public:
         SortParticles(particle_list);
     }
 
-    /*! \fn void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree)
+    /*! \fn void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree, double density_threshold)
      *  \brief search potential bound particles within Hill radius */
-    void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree) {
-        uint32_t nearby_count = 0;
+    void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree, double density_threshold) {
+        uint32_t nearby_count = 0, idx = 0;
         tree.RecursiveBallSearchCount(center_of_mass, tree.root, Hill_radius, nearby_count);
         auto *nearby_indices = new uint32_t[nearby_count];
         tree.BallSearch(center_of_mass, Hill_radius, nearby_indices, nearby_count);
@@ -4207,19 +4207,20 @@ public:
         double total_energy_over_mass_product;
 
         for (uint32_t i = 0; i != nearby_count; i++) {
-            if (tree.particle_list[i].in_clump_flag) {
+            idx = nearby_indices[i];
+            if (tree.particle_list[idx].in_clump_flag || tree.particle_list[idx].new_density < density_threshold) {
                 continue;
             } else {
-                auto tmp_total_mass = total_mass + tree.particle_list[i].mass;
-                // again we omit total_mass * tree.particle_list[i].mass since P_grav and E_k all have it
-                total_energy_over_mass_product = + 0.5 / tmp_total_mass * (vel_com - progIO->numerical_parameters.shear_vector*(center_of_mass[0]-tree.particle_list[i].pos[0]) - tree.particle_list[i].vel).Norm2()
-                        - progIO->numerical_parameters.grav_constant / (center_of_mass - tree.particle_list[i].pos).Norm();
+                auto tmp_total_mass = total_mass + tree.particle_list[idx].mass;
+                // again we omit total_mass * tree.particle_list[idx].mass since P_grav and E_k all have it
+                total_energy_over_mass_product = + 0.5 / tmp_total_mass * (vel_com - progIO->numerical_parameters.shear_vector*(center_of_mass[0]-tree.particle_list[idx].pos[0]) - tree.particle_list[idx].vel).Norm2()
+                                                 - progIO->numerical_parameters.grav_constant / (center_of_mass - tree.particle_list[idx].pos).Norm();
                 if (total_energy_over_mass_product < 0) { // bound
-                    indices.push_back(i);
+                    indices.push_back(idx);
                     total_mass = tmp_total_mass;
-                    center_of_mass = (center_of_mass * total_mass + tree.particle_list[i].mass * tree.particle_list[i].pos) / total_mass;
-                    vel_com = (total_mass * vel_com + tree.particle_list[i].mass * tree.particle_list[i].vel) / total_mass;
-                    tree.particle_list[i].in_clump_flag = true;
+                    center_of_mass = (center_of_mass * total_mass + tree.particle_list[idx].mass * tree.particle_list[idx].pos) / total_mass;
+                    vel_com = (total_mass * vel_com + tree.particle_list[idx].mass * tree.particle_list[idx].vel) / total_mass;
+                    tree.particle_list[idx].in_clump_flag = true;
                 }
             }
         }
@@ -4228,6 +4229,7 @@ public:
             particles.swap(tmp);
             SortParticles(tree.particle_list);
         }
+        delete[] nearby_indices;
     }
 
     /*! \fn void CalculateHillRadius()
@@ -4237,7 +4239,7 @@ public:
     }
 
     /*! \fn void CalculateAngularMomentum(BHtree<D> &tree)
-     *  \brief calculate the Hill radius */
+     *  \brief calculate the angular momentum in Hill units */
     void CalculateAngularMomentum(BHtree<D> &tree) {
         SmallVec<double, D> tmp_j {0};
         SmallVec<double, D> tmp_dr {0};
@@ -4267,7 +4269,7 @@ public:
     }
 
     /*! \fn void void CalculateCumulativeAngularMomentum(BHtree<D> &tree, std::ofstream &f)
-     *  \brief calculate the Hill radius */
+     *  \brief calculate the cumulative angular momentum inside out in Hill units */
     void CalculateCumulativeAngularMomentum(BHtree<D> &tree, std::ofstream &f) {
         SmallVec<double, D> tmp_j {0};
         SmallVec<double, D> tmp_dr {0};
