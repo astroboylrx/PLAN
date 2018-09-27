@@ -1618,20 +1618,22 @@ public:
         dvec non_ghost_max = paras.box_center + non_ghost_width;
         
         // First, we make ghost particles for radial direction which need shear mapping
+        // N.B.: f(x, y, z) = f(x + Lx, y - (q Omega Lx) * t, z)
+        //       f(x - Lx, y + (q Omega Lx) * t, z) = f(x, y, z)
         for (uint32_t i = 0; i != num_particles; i++) {
-            if (particles[i].pos[0] < non_ghost_min[0]) {
+            if (particles[i].pos[0] > non_ghost_max[0]) {
                 ghost_particles[ghost_id] = particles[i];
                 ghost_particles[ghost_id].id = tmp_id++;
-                ghost_particles[ghost_id].pos[0] += paras.box_length[0];
+                ghost_particles[ghost_id].pos[0] -= paras.box_length[0];
                 double new_y = ghost_particles[ghost_id].pos[1] + paras.shear_speed * time;
                 // new_y = new_y [- ymin] - int( (new_y - ymin) / L_Y ) * L_Y [+ ymin]
                 ghost_particles[ghost_id].pos[1] = new_y - static_cast<int>((new_y - paras.box_min[1]) / paras.box_length[1]) * paras.box_length[1];
                 ghost_id++;
             }
-            if (particles[i].pos[0] > non_ghost_max[0]) {
+            if (particles[i].pos[0] < non_ghost_min[0]) {
                 ghost_particles[ghost_id] = particles[i];
                 ghost_particles[ghost_id].id = tmp_id++;
-                ghost_particles[ghost_id].pos[0] -= paras.box_length[0];
+                ghost_particles[ghost_id].pos[0] += paras.box_length[0];
                 double new_y = ghost_particles[ghost_id].pos[1] - paras.shear_speed * time;
                 // new_y = [ymax -] ( ([ymax -] new_y) + int( (ymax - new_y) / L_Y ) * L_Y )
                 ghost_particles[ghost_id].pos[1] = new_y + static_cast<int>((paras.box_max[1] - new_y) / paras.box_length[1]) * paras.box_length[1];
@@ -3890,7 +3892,7 @@ private:
 public:
     /*! \var uint32_t peak_index
      *  \brief the index of the particle with the peak density */
-    uint32_t peak_index;
+    uint32_t peak_index {0};
 
     /*! \var std::vector<uint32_t> potential_subpeak_indices;
      *  \brief the indices of particles that may lead a sub-peak */
@@ -3922,15 +3924,15 @@ public:
     
     /*! \var double outer_one10th_radius
      *  \brief the radius of the outermost particle that has a density > 1/10 the peak density */
-    double outer_one10th_radius;
+    double outer_one10th_radius {0};
     
     /*! \var double inner_one10th_radius
      *  \brief the radius of the innermost particle that has a density < 1/10 the peak density */
-    double inner_one10th_radius;
+    double inner_one10th_radius {0};
     
     /*! \var double one10th_radius
      *  \brief the average radius = (inner_one10th_radius + outer_one10th_radius) / 2. */
-    double one10th_radius;
+    double one10th_radius {0};
     
     /* RL: On the one hand, very-newly-formed clumps, early-stage-merging clumps, and clumps starting accreting smaller companions may deviate from spherical shapes a lot. This "inner_one10th_radius" will avoid over-estiamting their radii and prevent unnecessary "group-merging" during clump-finding. On the other hand, late-stage-mering clumps and clumps with tidally-disrupted companions/streams only deviate a little from spherical shapes. This "outer_one10th_radius" will identified them and their sub-structures as one individual clump and perform group-merging during clump-finding. Therefore, using the average radius "one10th_radius" enables this program to find planetesimals more accurately.
      * RL: Note that outer_one10th_radius is not necessary larger than inner_one10th_radius (e.g., two adjacent indices but with outer_one10th_radius being the smaller one). Furthermore, one clump identified by (outer_)one10th_radius only may correspond to multiple clumps identified by inner_one10th_radius only, which may provide a good practice for categorizing sub-clumps.
@@ -3942,7 +3944,7 @@ public:
 
     /*! \var double two_sigma_mass_radius
      *  \brief the radius that contains 90% of the total mass */
-    double two_sigma_mass_radius;
+    double two_sigma_mass_radius {0};
 
     std::vector<uint32_t> preys;
     
@@ -4344,15 +4346,15 @@ public:
 
     /*! \var double density_threshold
      *  \brief the density criterion for choosing particles (~ rho_crit for outer rims of planetesimals) */
-    double density_threshold;
+    double density_threshold {0};
 
     /*! \var double clump_mass_threshold
      *  \brief the mass criterion for removing weak clumps */
-    double clump_mass_threshold;
+    double clump_mass_threshold {0};
 
     /*! \var double peak_density_threshold
      *  \brief the density criterion for peak densities of planetesimals (rho_crit for the particle with the highest density) */
-    double peak_density_threshold;
+    double peak_density_threshold {0};
 
     /*! \var std::vector<std::pair<uint32_t, double>> peaks_and_masses
      *  \brief a ordered vector of pairs recording the peak_indices (key to the map below) and masses */
