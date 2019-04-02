@@ -397,12 +397,15 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     // RL: debug use, output simple POINT3D file for ParaView to visualize
     /*
     std::ofstream file_lis2vtk;
-    file_lis2vtk.open(ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "vtk", std::ofstream::out);
+    std::string point_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "vtk";
+    file_lis2vtk.open(point_file_name, std::ofstream::out);
     if (!file_lis2vtk.is_open()) {
-        std::cout << "Failed to open vtk file" << std::endl;
+        progIO->error_message << "Failed to open vtk file: " << point_file_name << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
         return;
     } else {
-        std::cout << "Writing to " << ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "vtk" << std::endl;
+        progIO->out_content << "Writing to " << ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "vtk" << std::endl;
+        progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
     }
 
     file_lis2vtk << "# POINT3D file from t="+std::to_string(ds.particle_set.time) << "\n";
@@ -430,9 +433,11 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     std::string Finer_Sigma_p_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("lis"))+time.str()+".FSigma_p.txt";
     std::ofstream file_Finer_Sigma_p(Finer_Sigma_p_file_name, std::ofstream::out);
     if (!file_Finer_Sigma_p.is_open()) {
-        std::cout << "Failed to open "+Finer_Sigma_p_file_name << std::endl;
+        progIO->error_message << "Failed to open "+Finer_Sigma_p_file_name << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
     } else {
-        std::cout << "Writing to " << Finer_Sigma_p_file_name << std::endl;
+        progIO->out_content << "Writing to " << Finer_Sigma_p_file_name << std::endl;
+        progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
     }
 
     double **Sigma_p = ds.particle_set.MakeFinerSurfaceDensityMap(progIO->numerical_parameters.FineSp_Nx[0], progIO->numerical_parameters.FineSp_Nx[1]);
@@ -452,15 +457,23 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     Sigma_p = nullptr;
     //*/
 
+    // RL: debug use, rebuild a vtk file with particle info from lis file
+    /*
+    std::string rebuild_vtk_file_name = ori_vtk_file_name.substr(0, ori_vtk_file_name.find("vtk")) + "par.vtk";
+    ds.particle_set.template RebuildVtk<T>(progIO->numerical_parameters.box_resolution[0], progIO->numerical_parameters.box_resolution[1], progIO->numerical_parameters.box_resolution[2], rebuild_vtk_file_name);
+    //*/
+
     // RL: debug use, output Sigma_p
     /*
     std::string Sigma_p_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("lis")) + "Sigma_p.txt";
     std::ofstream file_Sigma_p(Sigma_p_file_name, std::ofstream::out);
     if (!file_Sigma_p.is_open()) {
-        std::cout << "Failed to open "+Sigma_p_file_name << std::endl;
+        progIO->error_message << "Failed to open "+Sigma_p_file_name << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
         return;
     } else {
-        std::cout << "Writing to " << Sigma_p_file_name << std::endl;
+        progIO->out_content << "Writing to " << Sigma_p_file_name << std::endl;
+        progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
     }
 
     VtkDataScalar<T, 3> tmp_rhop = VtkDataScalar<T, 3>();
@@ -499,12 +512,13 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
 
     //*/
 
-    // RL: debug use, output sub-sampled lis file for fast analyses
+    // RL: debug use, output a sub-sampled lis file for fast analyses
     /*
     std::ofstream file_subsample;
     unsigned long sampling_in_each_cpu = 4096;
-    std::string new_lis_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find("all")) + "sub.lis";
-    std::cout << "Sub-sampling to " << new_lis_file_name << std::endl;
+    std::string new_lis_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find(progIO->file_name.data_file_postname)) + "sub.lis";
+    progIO->out_content << "Sub-sampling to " << new_lis_file_name << std::endl;
+    progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
     file_subsample.open(new_lis_file_name, std::ios::binary);
     if (file_subsample.is_open()) {
         int tmp_int;
@@ -532,7 +546,8 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
                 num_particles_to_output++;
             }
         }
-        std::cout << "We will subsample " << num_particles_to_output << " particles. " << std::endl;
+        progIO->out_content << "We will subsample " << num_particles_to_output << " particles. " << std::endl;
+        progIO->Output(std::cout, progIO->out_content, __more_output, __all_processors);
 
         tmp_num_particles = static_cast<long>(num_particles_to_output);
         file_subsample.write(reinterpret_cast<char*>(&tmp_num_particles), sizeof(long));
@@ -563,6 +578,79 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
                 file_subsample.write(reinterpret_cast<char *>(&tmp_int), one_int);
             }
         }
+    } else {
+        progIO->error_message << "Failed to open vtk file: " << new_lis_file_name << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+    }
+    file_subsample.close();
+    //*/
+
+    // RL: debug use, output a lis file with ghost particles
+    /*
+    ds.particle_set.MakeGhostParticles(progIO->numerical_parameters);
+    std::ofstream file_subsample;
+    std::string new_lis_file_name = ori_lis_file_name.substr(0, ori_lis_file_name.find(progIO->file_name.data_file_postname)) + "ghost.lis";
+    progIO->out_content << "output a lis file including ghost to " << new_lis_file_name << std::endl;
+    progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
+    file_subsample.open(new_lis_file_name, std::ios::binary);
+    if (file_subsample.is_open()) {
+        int tmp_int;
+        long tmp_num_particles, tmp_long;
+        float tmp_float_value, tmp_float_vector[D];
+
+        ds.particle_set.coor_lim[6] = progIO->numerical_parameters.box_min[0] - progIO->numerical_parameters.ghost_zone_width[0];
+        ds.particle_set.coor_lim[7] = progIO->numerical_parameters.box_max[0] + progIO->numerical_parameters.ghost_zone_width[0];
+        ds.particle_set.coor_lim[8] = progIO->numerical_parameters.box_min[1] - progIO->numerical_parameters.ghost_zone_width[1];
+        ds.particle_set.coor_lim[9] = progIO->numerical_parameters.box_max[1] + progIO->numerical_parameters.ghost_zone_width[1];
+        ds.particle_set.coor_lim[10] = progIO->numerical_parameters.box_min[2] - progIO->numerical_parameters.ghost_zone_width[2];
+        ds.particle_set.coor_lim[11] = progIO->numerical_parameters.box_max[2] + progIO->numerical_parameters.ghost_zone_width[2];
+
+        for (int i = 0; i != 12; i++) {
+            tmp_float_value = static_cast<float>(ds.particle_set.coor_lim[i]);
+            file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+        }
+        file_subsample.write(reinterpret_cast<char*>(&ds.particle_set.num_types), sizeof(int));
+        for (unsigned int i = 0; i != ds.particle_set.num_types; i++) {
+            tmp_float_value = static_cast<float>(ds.particle_set.type_info[i]);
+            file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+        }
+        tmp_float_value = static_cast<float>(ds.particle_set.time);
+        file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+        tmp_float_value = static_cast<float>(ds.particle_set.dt);
+        file_subsample.write(reinterpret_cast<char*>(&tmp_float_value), sizeof(float));
+
+        Particle<D> *p;
+
+        tmp_num_particles = static_cast<long>(ds.particle_set.num_total_particles);
+        file_subsample.write(reinterpret_cast<char*>(&tmp_num_particles), sizeof(long));
+
+        size_t D_float = D * sizeof(float);
+        size_t one_float = sizeof(float);
+        size_t one_int = sizeof(int);
+        size_t one_long = sizeof(long);
+
+        for (uint32_t i = 0; i < ds.particle_set.num_total_particles; i += 1) {
+            p = &ds.particle_set.particles[i];
+            for (int i = 0; i != D; i++) {
+                tmp_float_vector[i] = static_cast<float>(p->pos[i]);
+            }
+            file_subsample.write(reinterpret_cast<char *>(&tmp_float_vector), D_float);
+            for (int i = 0; i != D; i++) {
+                tmp_float_vector[i] = static_cast<float>(p->vel[i]);
+            }
+            file_subsample.write(reinterpret_cast<char *>(&tmp_float_vector), D_float);
+            tmp_float_value = static_cast<float>(p->density);
+            file_subsample.write(reinterpret_cast<char *>(&tmp_float_value), one_float);
+
+            file_subsample.write(reinterpret_cast<char *>(&p->property_index), one_int);
+            tmp_long = static_cast<long>(p->id_in_run);
+            file_subsample.write(reinterpret_cast<char *>(&tmp_long), one_long);
+            tmp_int = static_cast<int>(p->cpu_id);
+            file_subsample.write(reinterpret_cast<char *>(&tmp_int), one_int);
+        }
+    } else {
+        progIO->error_message << "Failed to open vtk file: " << new_lis_file_name << std::endl;
+        progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
     }
     file_subsample.close();
     //*/
@@ -600,7 +688,279 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
     }
     //*/
 
+    // RL: calculation use, compute the angular momentum of each cells based on the surrounding cells
+    /*
+    if (D == 3) {
+        double blob_length = 1.8;
+        double blob_length2 = blob_length * blob_length;
+        int num_cells_in_blob_length = static_cast<int>(std::ceil(std::abs(blob_length)));
+        SmallVec<T, D> dx = SmallVec<T, D>(ds.vtk_data.spacing[0], ds.vtk_data.spacing[1], ds.vtk_data.spacing[2]);
+        std::vector<SmallVec<int, D>> neighbor_offset;
+        std::vector<SmallVec<T, D>> offset_dr;
 
+        for (int k = -num_cells_in_blob_length; k <= num_cells_in_blob_length; k++) {
+            for (int j = -num_cells_in_blob_length; j <= num_cells_in_blob_length; j++) {
+                for (int i = -num_cells_in_blob_length; i <= num_cells_in_blob_length; i++) {
+                    auto attempt_length2 = SmallVec<int, D>(k, j, i).Norm2();
+                    if (attempt_length2 > 0.0 && attempt_length2 <= blob_length2) {
+                        neighbor_offset.push_back(SmallVec<int, D>(i, j, k));
+                        offset_dr.push_back(neighbor_offset.back() * dx);
+                    }
+                }
+            }
+        }
+
+        VtkDataVector<T, D> J;
+        VtkDataScalar<T, D> obliquity;
+        SmallVec<T, D> &tmp_dr = offset_dr[0];
+        SmallVec<T, D> tmp_dv {0};
+        SmallVec<T, D> tmp_j {0};
+        SmallVec<T, D> z_hat {0, 0, 1};
+        VtkDataScalar<T, D> &rhop = ds.vtk_data.scalar_data["particle_density"];
+        VtkDataVector<T, D> &w = ds.vtk_data.vector_data["particle_momentum"];
+        auto &shear_vector = progIO->numerical_parameters.shear_vector;
+        int koff, joff, ioff, joff2;
+        double shear_distance = progIO->numerical_parameters.shear_speed * ds.particle_set.time;
+        J.data.resize(w.shape);
+        obliquity.data.resize(rhop.shape);
+
+        shear_distance = shear_distance - std::floor(shear_distance/progIO->numerical_parameters.box_length[0]) * progIO->numerical_parameters.box_length[0];
+        double shear_distance_in_cells = shear_distance / ds.vtk_data.spacing[1];
+        int sheared_cells = std::floor(shear_distance_in_cells);
+        double shear_fraction = 1 - (shear_distance_in_cells - std::floor(shear_distance_in_cells));
+        //std::cout << "shear_distance = " << shear_distance << ", shear_fraction = " << shear_fraction << ", sheared_cells = " << sheared_cells << std::endl;
+
+        // Step 1. Calculate J/ob for cells without the need of shear re-mapping
+        for (int k = 0; k != ds.vtk_data.num_cells[2]; k++) {
+            for (int j = 0; j != ds.vtk_data.num_cells[1]; j++) {
+                for (int i = num_cells_in_blob_length; i != ds.vtk_data.num_cells[0] - num_cells_in_blob_length; i++) {
+                    obliquity.data[k][j][i] = 0;
+                    for (int d = 0; d != D; d++) {
+                        J.data[k][j][i][d] = 0.;
+                    }
+                    if (rhop.data[k][j][i] > 0) {
+                        for (unsigned int item = 0; item != neighbor_offset.size(); item++) {
+                            koff = k + neighbor_offset[item][0];
+                            if (koff >= ds.vtk_data.num_cells[2]) {
+                                koff -= ds.vtk_data.num_cells[2];
+                            } else if (koff < 0) {
+                                koff += ds.vtk_data.num_cells[2];
+                            }
+                            joff = j + neighbor_offset[item][1];
+                            if (joff >= ds.vtk_data.num_cells[1]) {
+                                joff -= ds.vtk_data.num_cells[1];
+                            } else if (joff < 0) {
+                                joff += ds.vtk_data.num_cells[1];
+                            }
+                            ioff = i + neighbor_offset[item][2];
+                            if (rhop.data[koff][joff][ioff] <= 0) {
+                                continue;
+                            }
+                            tmp_dr = offset_dr[item];
+
+                            tmp_dv = SmallVec<T, D>(0);
+                            for (int d = 0; d != D; d++) {
+                                tmp_dv[d] = w.data[koff][joff][ioff][d]/rhop.data[koff][joff][ioff] - w.data[k][j][i][d]/rhop.data[k][j][i];
+                            }
+
+                            tmp_dv -= shear_vector * (tmp_dr[0]);
+                            tmp_j = tmp_dr.Cross(tmp_dv);
+                            tmp_j += progIO->numerical_parameters.Omega
+                                    * SmallVec<T, D>(-tmp_dr[0]*tmp_dr[2],
+                                                     -tmp_dr[1]*tmp_dr[2],
+                                                     (tmp_dr[0]*tmp_dr[0] + tmp_dr[1]*tmp_dr[1]));
+                            J.data[k][j][i][0] += tmp_j[0] * rhop.data[koff][joff][ioff];
+                            J.data[k][j][i][1] += tmp_j[1] * rhop.data[koff][joff][ioff];
+                            J.data[k][j][i][2] += tmp_j[2] * rhop.data[koff][joff][ioff];
+                        }
+                        obliquity.data[k][j][i] = std::acos(J.data[k][j][i][2]/std::sqrt(J.data[k][j][i][0]*J.data[k][j][i][0] + J.data[k][j][i][1]*J.data[k][j][i][1] + J.data[k][j][i][2]*J.data[k][j][i][2]));
+                    }
+                }
+            }
+        }
+
+        // Step 2. Calculate J/ob for cells on the left radial edge with shear re-mapping
+        for (int k = 0; k != ds.vtk_data.num_cells[2]; k++) {
+            for (int j = 0; j != ds.vtk_data.num_cells[1]; j++) {
+                for (int i = 0; i != num_cells_in_blob_length; i++) {
+                    obliquity.data[k][j][i] = 0;
+                    for (int d = 0; d != D; d++) {
+                        J.data[k][j][i][d] = 0.;
+                    }
+                    if (rhop.data[k][j][i] > 0) {
+                        for (unsigned int item = 0; item != neighbor_offset.size(); item++) {
+                            koff = k + neighbor_offset[item][0];
+                            if (koff >= ds.vtk_data.num_cells[2]) {
+                                koff -= ds.vtk_data.num_cells[2];
+                            } else if (koff < 0) {
+                                koff += ds.vtk_data.num_cells[2];
+                            }
+                            joff = j + neighbor_offset[item][1];
+                            if (joff >= ds.vtk_data.num_cells[1]) {
+                                joff -= ds.vtk_data.num_cells[1];
+                            } else if (joff < 0) {
+                                joff += ds.vtk_data.num_cells[1];
+                            }
+
+                            tmp_dv = SmallVec<T, D>(0);
+                            ioff = i + neighbor_offset[item][2];
+                            if (ioff < 0) {
+                                ioff += ds.vtk_data.num_cells[0];
+                                joff -= sheared_cells;
+                                if (joff < 0) {
+                                    joff += ds.vtk_data.num_cells[1];
+                                }
+                                joff2 = joff - 1;
+                                if (joff2 < 0) {
+                                    joff2 += ds.vtk_data.num_cells[1];
+                                }
+                                if (rhop.data[koff][joff][ioff] <= 0 && rhop.data[koff][joff2][ioff] <= 0) {
+                                    continue;
+                                }
+                                for (int d = 0; d != D; d++) {
+                                    if (rhop.data[koff][joff][ioff] > 0) {
+                                        tmp_dv[d] = shear_fraction * w.data[koff][joff][ioff][d] /
+                                                    rhop.data[koff][joff][ioff];
+                                    }
+                                    if (rhop.data[koff][joff2][ioff] > 0) {
+                                        tmp_dv[d] += (1-shear_fraction) * w.data[koff][joff2][ioff][d]/rhop.data[koff][joff2][ioff];
+                                    }
+                                    tmp_dv[d] -= w.data[k][j][i][d]/rhop.data[k][j][i];
+                                }
+                            } else {
+                                if (rhop.data[koff][joff][ioff] <= 0) {
+                                    continue;
+                                }
+                                for (int d = 0; d != D; d++) {
+                                    tmp_dv[d] = w.data[koff][joff][ioff][d]/rhop.data[koff][joff][ioff] - w.data[k][j][i][d]/rhop.data[k][j][i];
+                                }
+                            }
+
+                            tmp_dr = offset_dr[item];
+                            tmp_dv -= shear_vector * (tmp_dr[0]);
+                            tmp_j = tmp_dr.Cross(tmp_dv);
+                            tmp_j += progIO->numerical_parameters.Omega
+                                     * SmallVec<T, D>(-tmp_dr[0]*tmp_dr[2],
+                                                      -tmp_dr[1]*tmp_dr[2],
+                                                      (tmp_dr[0]*tmp_dr[0] + tmp_dr[1]*tmp_dr[1]));
+                            J.data[k][j][i][0] += tmp_j[0] * rhop.data[koff][joff][ioff];
+                            J.data[k][j][i][1] += tmp_j[1] * rhop.data[koff][joff][ioff];
+                            J.data[k][j][i][2] += tmp_j[2] * rhop.data[koff][joff][ioff];
+                        }
+                        obliquity.data[k][j][i] = std::acos(J.data[k][j][i][2]/std::sqrt(J.data[k][j][i][0]*J.data[k][j][i][0] + J.data[k][j][i][1]*J.data[k][j][i][1] + J.data[k][j][i][2]*J.data[k][j][i][2]));
+                    }
+                }
+            }
+        }
+
+        // Step 3. Calculate J/ob for cells on the left radial edge with shear re-mapping
+        for (int k = 0; k != ds.vtk_data.num_cells[2]; k++) {
+            for (int j = 0; j != ds.vtk_data.num_cells[1]; j++) {
+                for (int i = ds.vtk_data.num_cells[0]-num_cells_in_blob_length; i != ds.vtk_data.num_cells[0]; i++) {
+                    obliquity.data[k][j][i] = 0;
+                    for (int d = 0; d != D; d++) {
+                        J.data[k][j][i][d] = 0.;
+                    }
+                    if (rhop.data[k][j][i] > 0) {
+                        for (unsigned int item = 0; item != neighbor_offset.size(); item++) {
+                            koff = k + neighbor_offset[item][0];
+                            if (koff >= ds.vtk_data.num_cells[2]) {
+                                koff -= ds.vtk_data.num_cells[2];
+                            } else if (koff < 0) {
+                                koff += ds.vtk_data.num_cells[2];
+                            }
+                            joff = j + neighbor_offset[item][1];
+                            if (joff >= ds.vtk_data.num_cells[1]) {
+                                joff -= ds.vtk_data.num_cells[1];
+                            } else if (joff < 0) {
+                                joff += ds.vtk_data.num_cells[1];
+                            }
+
+                            tmp_dv = SmallVec<T, D>(0);
+                            ioff = i + neighbor_offset[item][2];
+                            if (ioff > ds.vtk_data.num_cells[0]) {
+                                ioff -= ds.vtk_data.num_cells[0];
+                                joff += sheared_cells;
+                                if (joff >= ds.vtk_data.num_cells[1]) {
+                                    joff -= ds.vtk_data.num_cells[1];
+                                }
+                                joff2 = joff + 1;
+                                if (joff2 >= ds.vtk_data.num_cells[1]) {
+                                    joff2 -= ds.vtk_data.num_cells[1];
+                                }
+                                if (rhop.data[koff][joff][ioff] <= 0 && rhop.data[koff][joff2][ioff] <= 0) {
+                                    continue;
+                                }
+                                for (int d = 0; d != D; d++) {
+                                    if (rhop.data[koff][joff][ioff] > 0) {
+                                        tmp_dv[d] = shear_fraction * w.data[koff][joff][ioff][d] /
+                                                    rhop.data[koff][joff][ioff];
+                                    }
+                                    if (rhop.data[koff][joff2][ioff] > 0) {
+                                        tmp_dv[d] += (1-shear_fraction) * w.data[koff][joff2][ioff][d]/rhop.data[koff][joff2][ioff];
+                                    }
+                                    tmp_dv[d] -= w.data[k][j][i][d]/rhop.data[k][j][i];
+                                }
+                            } else {
+                                if (rhop.data[koff][joff][ioff] <= 0) {
+                                    continue;
+                                }
+                                for (int d = 0; d != D; d++) {
+                                    tmp_dv[d] = w.data[koff][joff][ioff][d]/rhop.data[koff][joff][ioff] - w.data[k][j][i][d]/rhop.data[k][j][i];
+                                }
+                            }
+
+                            tmp_dr = offset_dr[item];
+                            tmp_dv -= shear_vector * (tmp_dr[0]);
+                            tmp_j = tmp_dr.Cross(tmp_dv);
+                            tmp_j += progIO->numerical_parameters.Omega
+                                     * SmallVec<T, D>(-tmp_dr[0]*tmp_dr[2],
+                                                      -tmp_dr[1]*tmp_dr[2],
+                                                      (tmp_dr[0]*tmp_dr[0] + tmp_dr[1]*tmp_dr[1]));
+                            J.data[k][j][i][0] += tmp_j[0] * rhop.data[koff][joff][ioff];
+                            J.data[k][j][i][1] += tmp_j[1] * rhop.data[koff][joff][ioff];
+                            J.data[k][j][i][2] += tmp_j[2] * rhop.data[koff][joff][ioff];
+                        }
+                        obliquity.data[k][j][i] = std::acos(J.data[k][j][i][2]/std::sqrt(J.data[k][j][i][0]*J.data[k][j][i][0] + J.data[k][j][i][1]*J.data[k][j][i][1] + J.data[k][j][i][2]*J.data[k][j][i][2]));
+                    }
+                }
+            }
+        }
+
+        std::ofstream file_J;
+        std::string new_vtk_file_name = ori_vtk_file_name.substr(0, ori_vtk_file_name.find("vtk")) + "J.vtk";
+        progIO->out_content << "Output to " << new_vtk_file_name << std::endl;
+        progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
+        file_J.open(new_vtk_file_name, std::ios::binary);
+        if (!file_J.is_open()) {
+            progIO->error_message << "Cannot open file " << new_vtk_file_name << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        } else {
+            file_J << "# vtk DataFile Version 3.0" << std::endl;
+            file_J << "CONSERVED vars at time= " << std::scientific << std::setprecision(6) << ds.vtk_data.time
+                   << ", level= 0, domain= 0" << std::endl;
+            file_J << "BINARY\nDATASET STRUCTURED_POINTS\nDIMENSIONS " << std::fixed << ds.vtk_data.num_cells[0] + 1
+                   << " " << ds.vtk_data.num_cells[1] + 1 << " " << ds.vtk_data.num_cells[2] + 1 << std::endl;
+            file_J << "ORIGIN" << std::scientific << std::setprecision(6) << std::setw(14) << ds.vtk_data.origin[0]
+                   << std::setw(14) << ds.vtk_data.origin[1] << std::setw(14) << ds.vtk_data.origin[2] << std::endl;
+            file_J << "SPACING" << std::scientific << std::setprecision(6) << std::setw(13) << ds.vtk_data.spacing[0]
+                   << std::setw(13) << ds.vtk_data.spacing[1] << std::setw(13) << ds.vtk_data.spacing[2] << std::endl;
+            file_J << "CELL_DATA " << std::fixed << ds.vtk_data.num_cell_data << std::endl;
+            file_J << "VECTORS particle_angular_momentum float" << std::endl;
+            for (auto it = J.data.data(); it != J.data.data() + J.data.num_elements(); it++) {
+                *it = endian_reverse<T>(*it);
+            }
+            file_J.write(reinterpret_cast<char *>(J.data.data()), D * sizeof(T) * ds.vtk_data.num_cell_data);
+            file_J << std::endl;
+            file_J << "SCALARS obliquity float\nLOOKUP_TABLE default" << std::endl;
+            for (auto it = obliquity.data.data(); it != obliquity.data.data() + obliquity.data.num_elements(); it++) {
+                *it = endian_reverse<T>(*it);
+            }
+            file_J.write(reinterpret_cast<char *>(obliquity.data.data()), sizeof(T) * ds.vtk_data.num_cell_data);
+            file_J.close();
+        }
+    }
+    //*/
 };
 
 #endif /* analyses_hpp */

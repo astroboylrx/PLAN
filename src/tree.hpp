@@ -1526,6 +1526,8 @@ public:
     /*! \fn void ReadLisFile(int loop_count)
      *  \brief read particle data from *.lis files */
     void ReadLisFile(int loop_count) {
+        auto &paras = progIO->numerical_parameters;
+
         if (progIO->flags.combined_flag) {
             ReadSingleLisFile(progIO->file_name.lis_data_file_name.begin()+loop_count);
         } else {
@@ -1538,34 +1540,34 @@ public:
         progIO->physical_quantities[loop_count].dt = dt;
 
         if (loop_count == mpi->loop_begin) {
-            progIO->numerical_parameters.box_min = SmallVec<double, D>(coor_lim[6], coor_lim[8], coor_lim[10]);
-            progIO->numerical_parameters.box_max = SmallVec<double, D>(coor_lim[7], coor_lim[9], coor_lim[11]);
-            progIO->numerical_parameters.box_center = (progIO->numerical_parameters.box_min + progIO->numerical_parameters.box_max) / 2.0;
-            progIO->numerical_parameters.box_length = progIO->numerical_parameters.box_max - progIO->numerical_parameters.box_min;
-            progIO->numerical_parameters.CalculateNewParameters();
+            paras.box_min = SmallVec<double, D>(coor_lim[6], coor_lim[8], coor_lim[10]);
+            paras.box_max = SmallVec<double, D>(coor_lim[7], coor_lim[9], coor_lim[11]);
+            paras.box_center = (paras.box_min + paras.box_max) / 2.0;
+            paras.box_length = paras.box_max - paras.box_min;
+            paras.CalculateNewParameters();
 
-            progIO->numerical_parameters.mass_per_particle.resize(num_types);
-            progIO->numerical_parameters.mass_fraction_per_species.resize(num_types);
+            paras.mass_per_particle.resize(num_types);
+            paras.mass_fraction_per_species.resize(num_types);
             double tmp_sum = 0;
             for (unsigned int i = 0; i != num_types; i++) {
-                progIO->numerical_parameters.mass_fraction_per_species[i] = type_info[i];
+                paras.mass_fraction_per_species[i] = type_info[i];
                 tmp_sum += type_info[i];
             }
             for (unsigned int i = 0; i != num_types; i++) {
-                progIO->numerical_parameters.mass_fraction_per_species[i] /= tmp_sum;
-                progIO->numerical_parameters.mass_total_code_units = progIO->numerical_parameters.solid_to_gas_ratio * progIO->numerical_parameters.box_length[0] * progIO->numerical_parameters.box_length[1] * std::sqrt(2.*progIO->numerical_parameters.PI);
-                progIO->numerical_parameters.mass_per_particle[i] = progIO->numerical_parameters.mass_fraction_per_species[i] * progIO->numerical_parameters.mass_total_code_units / num_particles;
+                paras.mass_fraction_per_species[i] /= tmp_sum;
+                paras.mass_total_code_units = paras.solid_to_gas_ratio * paras.box_length[0] * paras.box_length[1] * std::sqrt(2.*paras.PI);
+                paras.mass_per_particle[i] = paras.mass_fraction_per_species[i] * paras.mass_total_code_units / num_particles;
             }
         }
 
         if (progIO->flags.user_defined_box_flag) {
             for (int i = 0; i != dim; i++) {
                 if (progIO->user_box_min[i] == 0 && progIO->user_box_max[i] == 0) {
-                    progIO->user_box_min[i] = progIO->numerical_parameters.box_min[i];
-                    progIO->user_box_max[i] = progIO->numerical_parameters.box_max[i];
+                    progIO->user_box_min[i] = paras.box_min[i];
+                    progIO->user_box_max[i] = paras.box_max[i];
                 }
             }
-            if (progIO->numerical_parameters.box_min.InRange(progIO->user_box_min, progIO->user_box_max) && progIO->numerical_parameters.box_max.InRange(progIO->user_box_min, progIO->user_box_max)) {
+            if (paras.box_min.InRange(progIO->user_box_min, progIO->user_box_max) && paras.box_max.InRange(progIO->user_box_min, progIO->user_box_max)) {
                 progIO->log_info << "User-defined coordinate limits are beyond the original box. Nothing to do." << std::endl;
             } else {
                 progIO->log_info << "User-defined coordinate limits are in effect: min = " << progIO->user_box_min << "; max = " << progIO->user_box_max << ". Turning on No_Ghost flag is recommended. ";
@@ -1599,7 +1601,7 @@ public:
     /*! \fn void MakeGhostParticles(const NumericalParameters &paras)
      *  \brief make ghost particles for ghost zone based on ghost zone size
      *  Note this function assumes we are dealing with 3D data. We can implement more if there are other situations. */
-    void MakeGhostParticles(const NumericalParameters &paras) {
+    void MakeGhostParticles(NumericalParameters &paras) {
         if (progIO->flags.no_ghost_particle_flag) {
             return;
         }
@@ -1705,9 +1707,10 @@ public:
 
     /*! \fn void MakeFinerSurfaceDensityMap(const int Nx, const int Ny)
      *  \brief output the solid surface density with finer resolution */
-    double** MakeFinerSurfaceDensityMap(const int Nx, const int Ny) {
+    double** MakeFinerSurfaceDensityMap(const unsigned int Nx, const unsigned int Ny) {
         double **Sigma_ghost = nullptr;
-        double tmp_Sigma[Ny+4][Nx+4] = {0.0}; // 1 more cell each side as ghost zones
+        // clang gives error: variable-sized object may not be initialized
+        double tmp_Sigma[Ny+4][Nx+4]; // = {0.0}; // 1 more cell each side as ghost zones
         double ccx[Nx+4], ccy[Ny+4], tmp, idx_origin, idy_origin; // cell-center-x/y
         double dx, dy, inv_dx, inv_dy, dx2, dy2, half_dx, half_dy, three_half_dx, three_half_dy;
         std::vector<double> sigma_per_particle;
@@ -1887,7 +1890,192 @@ public:
 
         return Sigma_p;
     }
-    
+
+    /*! \fn void RebuildVtk(const int Nx, const int Ny, const int Nz, std::string filename)
+     *  \brief output the vtk file with particle density and momentum */
+    template <class T>
+    void RebuildVtk(const unsigned int &Nx, const unsigned int &Ny, const unsigned int &Nz, std::string &filename) {
+        auto &paras = progIO->numerical_parameters;
+        VtkDataScalar<T, D> rhop;
+        VtkDataVector<T, D> w;
+        rhop.data.resize(boost::extents[Nz][Ny][Nx]);
+        w.data.resize(boost::extents[Nz][Ny][Nx][3]);
+
+        boost::multi_array<T, 3> rhop_ghost;
+        boost::multi_array<T, 4> w_ghost;
+        rhop_ghost.resize(boost::extents[Nz+4][Ny+4][Nx+4]);
+        w_ghost.resize(boost::extents[Nz+4][Ny+4][Nx+4][3]);
+
+        double ccx[Nx+4], ccy[Ny+4], ccz[Nz+4], tmp, idx_origin, idy_origin, idz_origin; // cell-center-x/y
+        double dx, dy, dz, inv_dx, inv_dy, inv_dz, dx2, dy2, dz2;
+        double half_dx, half_dy, half_dz, three_half_dx, three_half_dy, three_half_dz;
+        std::vector<double> rhop_per_particle;
+
+        dx = paras.box_length[0] / Nx;
+        dy = paras.box_length[1] / Ny;
+        dz = paras.box_length[2] / Nz;
+
+        inv_dx = 1./dx; dx2 = dx*dx; half_dx = dx/2.; three_half_dx = 1.5*dx;
+        inv_dy = 1./dy; dy2 = dy*dy; half_dy = dy/2.; three_half_dy = 1.5*dy;
+        inv_dz = 1./dz; dz2 = dz*dz; half_dz = dz/2.; three_half_dz = 1.5*dz;
+
+        // usually, dx = dy = dz
+        paras.ghost_zone_width = sn::dvec(dx, dy, dz);
+        paras.max_ghost_zone_width = MaxOf(dx, dy, dz);
+        MakeGhostParticles(paras);
+
+        tmp = paras.box_min[0] - 2.5 * dx; // start from outside
+        idx_origin = paras.box_min[0] - dx; // start from cell 1
+        std::generate(ccx, ccx+Nx+4, [&tmp, &dx]() {
+            tmp += dx;
+            return tmp;
+        });
+
+        tmp = paras.box_min[1] - 2.5 * dy; // start from outside
+        idy_origin = paras.box_min[1] - dy; // start from cell 1
+        std::generate(ccy, ccy+Ny+4, [&tmp, &dy]() {
+            tmp += dy;
+            return tmp;
+        });
+
+        tmp = paras.box_min[2] - 2.5 * dz; // start from outside
+        idz_origin = paras.box_min[2] - dz; // start from cell 1
+        std::generate(ccz, ccz+Nz+4, [&tmp, &dz]() {
+            tmp += dz;
+            return tmp;
+        });
+
+        rhop_per_particle.resize(num_types);
+        for (unsigned int i = 0; i != num_types; i++) {
+            rhop_per_particle[i] = paras.mass_per_particle[i] / dx / dy / dz;
+        }
+
+        Particle<D> *p;
+        int idx, idy, idz;
+        double dist, weightx[3], weighty[3], weightz[3];
+        for (uint32_t i = 0; i < num_total_particles; i++) {
+            p = &particles[i];
+            idx = static_cast<int>(std::floor((p->pos[0] - idx_origin) * inv_dx));
+            idy = static_cast<int>(std::floor((p->pos[1] - idy_origin) * inv_dy));
+            idz = static_cast<int>(std::floor((p->pos[2] - idz_origin) * inv_dz));
+
+            if (progIO->flags.user_defined_box_flag) {
+                if (idx > Nx+1 || idx < 0) {
+                    continue;
+                }
+                if (idy > Ny+1 || idy < 0) {
+                    continue;
+                }
+                if (idz > Nz+1 || idz < 0) {
+                    continue;
+                }
+            } else {
+                if (idx == Nx+2) {
+                    idx -= 1; // for exactly surface_max[0]
+                }
+                if (idy == Ny+2) {
+                    idy -= 1; // for exactly surface_max[1]
+                }
+                if (idz == Nz+2) {
+                    idz -= 1; // for exactly surface_max[1]
+                }
+                if (idx == -1) {
+                    idx = 0; // for exactly surface_min[0]
+                }
+                if (idy == -1) {
+                    idy = 0; // for exactly surface_min[1]
+                }
+                if (idz == -1) {
+                    idz = 0; // for exactly surface_min[1]
+                }
+            }
+
+            for (int j = 0; j != 3; j++) {
+                dist = std::abs(p->pos[0] - ccx[idx + j]);
+                if (dist <= half_dx) {
+                    weightx[j] = 0.75 - dist * dist / dx2;
+                } else if (dist < three_half_dx) {
+                    weightx[j] = 0.5 * std::pow(1.5 - dist / dx, 2.);
+                } else {
+                    weightx[j] = 0.;
+                }
+                dist = std::abs(p->pos[1] - ccy[idy + j]);
+                if (dist <= half_dy) {
+                    weighty[j] = 0.75 - dist * dist / dy2;
+                } else if (dist < three_half_dy) {
+                    weighty[j] = 0.5 * std::pow(1.5 - dist / dy, 2.);
+                } else {
+                    weighty[j] = 0.;
+                }
+                dist = std::abs(p->pos[2] - ccz[idz + j]);
+                if (dist <= half_dz) {
+                    weightz[j] = 0.75 - dist * dist / dz2;
+                } else if (dist < three_half_dz) {
+                    weightz[j] = 0.5 * std::pow(1.5 - dist / dz, 2.);
+                } else {
+                    weightz[j] = 0.;
+                }
+            }
+
+            for (int j = 0; j != 3; j++) {
+                for (int k = 0; k != 3; k++) {
+                    for (int l = 0; l != 3; l++) {
+                        double tmp_weight = weightz[j] * weighty[k] * weightx[l];
+                        rhop_ghost[idz + j][idy + k][idx + l] += rhop_per_particle[p->property_index] * tmp_weight;
+                        for (int d = 0; d != 3; d++) {
+                            w_ghost[idz + j][idy + k][idx + l][d] += rhop_per_particle[p->property_index] * tmp_weight * p->vel[d];
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int iz = 0; iz != Nz; iz++) {
+            for (int iy = 0; iy != Ny; iy++) {
+                std::memcpy(&(rhop.data[iz][iy][0]), &(rhop_ghost[iz+2][iy+2][2]), sizeof(T)*Nx);
+                std::memcpy(&(w.data[iz][iy][0][0]), &(w_ghost[iz+2][iy+2][2][0]), sizeof(T)*Nx*3);
+            }
+        }
+
+        std::ofstream file_vtk;
+        file_vtk.open(filename, std::ios::binary);
+        if (file_vtk.is_open()) {
+            progIO->out_content << "Writing to " << filename << std::endl;
+            progIO->Output(std::cout, progIO->out_content, __normal_output, __all_processors);
+            file_vtk << "# vtk DataFile Version 3.0" << std::endl;
+            file_vtk << "CONSERVED vars at time= " << std::scientific << std::setprecision(6) << time
+                     << ", level= 0, domain= 0" << std::endl;
+            file_vtk << "BINARY\nDATASET STRUCTURED_POINTS\nDIMENSIONS " << std::fixed << Nx + 1
+                     << " " << Ny + 1 << " " << Nz + 1 << std::endl;
+            file_vtk << "ORIGIN" << std::scientific << std::setprecision(6) << std::setw(14) << paras.box_center[0]
+                     << std::setw(14) << paras.box_center[1] << std::setw(14) << paras.box_center[2] << std::endl;
+            file_vtk << "SPACING" << std::scientific << std::setprecision(6) << std::setw(13) << paras.cell_length[0]
+                     << std::setw(13) << paras.cell_length[1] << std::setw(13) << paras.cell_length[2] << std::endl;
+            file_vtk << "CELL_DATA " << std::fixed << Nx * Ny * Nz << std::endl;
+            file_vtk << "SCALARS particle_density float\nLOOKUP_TABLE default" << std::endl;
+            for (auto it = rhop.data.data(); it != rhop.data.data() + rhop.data.num_elements(); it++) {
+                *it = endian_reverse<T>(*it);
+            }
+            file_vtk.write(reinterpret_cast<char *>(rhop.data.data()), sizeof(T) * Nx * Ny * Nz);
+            file_vtk << std::endl;
+            file_vtk << "VECTORS particle_momentum float" << std::endl;
+            for (auto it = w.data.data(); it != w.data.data() + w.data.num_elements(); it++) {
+                *it = endian_reverse<T>(*it);
+            }
+            file_vtk.write(reinterpret_cast<char *>(w.data.data()), D * sizeof(T) * Nx * Ny * Nz);
+            file_vtk.close();
+        } else {
+            progIO->error_message << "Failed to open " << filename << std::endl;
+            progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+        }
+
+        rhop.data.resize(boost::extents[0][0][0]);
+        w.data.resize(boost::extents[0][0][0][0]);
+        rhop_ghost.resize(boost::extents[0][0][0]);
+        w_ghost.resize(boost::extents[0][0][0][0]);
+
+    }
+
 };
 
 
@@ -1974,6 +2162,7 @@ private:
 
     /*
      * Magic numbers for double2int: note that the double 0x1p+0(=1 in decimal) cannot be converted this way, so that the range of numbers is, strictly,  [0, 1). This two magic number make sure that the only 2^32 particles can be distinguished in one dimension. In other word, the minimum distance between two particles (or to be recognized as two particles) in one dimension case is 1.0/2^32 = 2.3283e-10.
+     * N.B.: if the box is quite large, keep in mind that the resolution before rescaling is max(box_length)/2^32. Thus, if particles only concentrate at a certain region, it is better to focus on that region instead of the entire box.
      */
 
     /*! \var static constexpr double MAGIC = 6755399441055744.0
@@ -2274,7 +2463,7 @@ public:
     
     /*! \var double half_width
      *  \brief half width of the whole tree structure */
-    double half_width;
+    double half_width {0};
     
     /*! \var int level_count[max_level]
      *  \brief count how many nodes in each level */
@@ -2366,7 +2555,7 @@ public:
         typename MortonKey<D>::morton_key *tmp_morton = new typename MortonKey<D>::morton_key[num_particles];
 
         uint32_t new_index = 0; // used for tmp[...]
-        for (uint32_t i = 0; i != num_particles; ) {
+        for (uint32_t i = 0; i < num_particles; ) {
             // check if it belongs to a sink particle (at the same position by machine precision)
             tmp_morton[new_index] = morton[i];
             if (i < num_particles && (morton[i]<<32) == (morton[i+1]<<32)) {
@@ -2510,12 +2699,54 @@ public:
         }
     }
     
-    /*! \fn void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set)
+    /*! \fn void BuildTree(NumericalParameters &paras, ParticleSet<D> &particle_set, bool quiet=false, bool check_pos=true)
      *  \brief build tree from particle data */
-    void BuildTree(const NumericalParameters &paras, ParticleSet<D> &particle_set, bool quiet=false) { // double underscore here is to avoid confusion with all sorts of members
+    void BuildTree(NumericalParameters &paras, ParticleSet<D> &particle_set, bool quiet=false, bool check_pos=true) { // double underscore here is to avoid confusion with all sorts of members
         Reset();
-        half_width = paras.max_half_width + paras.max_ghost_zone_width;
-        root_center = paras.box_center;
+
+        // RL: if particles only occupy a small region in the box, then this tree does not need to cover the entire box (ghost particles also accounted for).
+        if (check_pos) {
+            paras.particle_max = particle_set[0].pos;
+            paras.particle_min = particle_set[0].pos;
+            for (uint32_t i = 1; i != particle_set.num_total_particles; i++) {
+                if (!SmallVecLessEq(paras.particle_min, particle_set[i].pos)) {
+                    for (int d = 0; d != D; d++) {
+                        paras.particle_min[d] = std::min(particle_set[i].pos[d], paras.particle_min[d]);
+                    }
+                }
+                if (!SmallVecGreatEq(paras.particle_max, particle_set[i].pos)) {
+                    for (int d = 0; d != D; d++) {
+                        paras.particle_max[d] = std::max(particle_set[i].pos[d], paras.particle_max[d]);
+                    }
+                }
+            }
+            paras.max_particle_extent = 0.0;
+            for (int d = 0; d != D; d++) {
+                paras.max_particle_extent = std::max(paras.max_particle_extent, paras.particle_max[d] - paras.particle_min[d]);
+            }
+
+            half_width = paras.max_half_width + paras.max_ghost_zone_width;
+            root_center = paras.box_center;
+            if (paras.max_particle_extent < half_width) {
+                // Round it for better analyses
+                half_width = (std::ceil(paras.max_particle_extent * 100.) + 1) / 100.;
+                for (int d = 0; d != D; d++) {
+                    if (paras.particle_max[d] - paras.particle_min[d] < 0.5 * paras.box_length[d]) {
+                        root_center[d] = (paras.particle_max[d] + paras.particle_min[d]) / 2.0;
+                        root_center[d] = std::round(root_center[d] * 1000.) / 1000.;
+                    } else {
+                        root_center[d] = paras.box_center[d];
+                    }
+                }
+                progIO->log_info << "According to the spatial distribution of particles, the root node of BH tree is now centered at " << root_center << ", and with a half_width of " << half_width << std::endl;
+            }
+        } else {
+            // if root_center and half_width are not set, we use the default box info
+            if (half_width < 1e-16) {
+                half_width = paras.max_half_width + paras.max_ghost_zone_width;
+                root_center = paras.box_center;
+            }
+        }
 
         // Since one processor deals with one entire snapshot, so we need to make sure the total number of particles is smaller than MAX(uint32_t). If needed in the future, we may find a way to deploy multiple processors to deal with the data in one single snapshot.
         assert(particle_set.num_total_particles < (uint32_t)0xffffffff);
@@ -2528,7 +2759,7 @@ public:
             particle_list[i].mass = progIO->numerical_parameters.mass_per_particle[particle_set[i].property_index];
             particle_list[i].original_id = i; // != particle_set[i].id, it is the original index of particles, after sorting by morton key, the order changes
         }
-        
+
         // compute Morton Keys and sort particle_list by Morton order
         this->InitMortonKey(root_center-dvec(half_width), root_center+dvec(half_width));
         morton = new typename MortonKey<D>::morton_key[num_particles];
@@ -2603,16 +2834,14 @@ public:
         cell_length_squared = cell_length * cell_length;
         three_half_cell_length = half_cell_length * 3.;
 
-        progIO->log_info << "Finish building a tree: num_nodes = " << num_nodes << ", num_sink_particles = " << sink_particle_indices.size();
-        if (sink_particle_indices.size() > 0) {
-            progIO->log_info << ", the largest sink particle contains " << std::max_element(sink_particle_indices.begin(), sink_particle_indices.end(), [](const typename decltype(sink_particle_indices)::value_type &a, const typename decltype(sink_particle_indices)::value_type &b) {
-                return a.second.size() < b.second.size();
-            })->second.size() << " super particles. ";
-        }
-        progIO->log_info << std::endl;
-        if (quiet) {
-            progIO->Reset(progIO->log_info);
-        } else {
+        if (!quiet) {
+            progIO->log_info << "Finish building a tree: num_nodes = " << num_nodes << ", num_sink_particles = " << sink_particle_indices.size();
+            if (sink_particle_indices.size() > 0) {
+                progIO->log_info << ", the largest sink particle contains " << std::max_element(sink_particle_indices.begin(), sink_particle_indices.end(), [](const typename decltype(sink_particle_indices)::value_type &a, const typename decltype(sink_particle_indices)::value_type &b) {
+                    return a.second.size() < b.second.size();
+                })->second.size() << " super particles. ";
+            }
+            progIO->log_info << std::endl;
             progIO->Output(std::clog, progIO->log_info, __more_output, __all_processors);
         }
     }
@@ -2630,7 +2859,8 @@ public:
     }
     
     /*! \fn void CheckTree(const int node, const int __level, const dvec &node_center, const double __half_width)
-     *  \brief traverse the tree and check whether each point is within the node it is supposed to be. Also check levels/widths/centers */
+     *  \brief traverse the tree and check whether each point is within the node it is supposed to be. Also check levels/widths/centers
+     *  \todo if some particles are outside their nodes due to the lack of Morton Key spatial resolution, we need to relocate these particles into their nodes, as long as the number is not big. */
     void CheckTree(const int node, const int __level, const dvec &node_center, const double __half_width) {
         assert(tree[node].level == __level);
         assert(tree[node].half_width == __half_width);
@@ -3236,12 +3466,12 @@ public:
     void RemoveSmallMassAndLowPeak(DataSet<T, D> &ds) {
         std::vector<uint32_t> peaks_to_be_deleted;
         
-        for (auto it : ds.planetesimal_list.planetesimals) {
+        for (auto &it : ds.planetesimal_list.planetesimals) {
             if (it.second.total_mass < ds.planetesimal_list.clump_mass_threshold || particle_list[it.first].new_density < ds.planetesimal_list.peak_density_threshold) {
                 peaks_to_be_deleted.push_back(it.first);
             }
         }
-        for (auto it : peaks_to_be_deleted) {
+        for (auto &it : peaks_to_be_deleted) {
             ds.planetesimal_list.planetesimals.erase(it);
         }
         peaks_to_be_deleted.resize(0);
@@ -3276,23 +3506,25 @@ public:
      *  Also, we force all density kernels to take the same format of arguments. */
     template <class T>
     void FindPlanetesimals(DataSet<T, D> &ds, int loop_count) {
-
-        uint32_t horizontal_resolution = progIO->numerical_parameters.box_resolution[0] * progIO->numerical_parameters.box_resolution[1];
+        auto &paras = progIO->numerical_parameters;
+        uint32_t horizontal_resolution = paras.box_resolution[0] * paras.box_resolution[1];
+        if (ds.tree.half_width < paras.max_half_width + paras.max_ghost_zone_width - 1e-16) {
+            // if particles are confined at a small region
+            horizontal_resolution = static_cast<uint32_t>(std::pow(ds.tree.half_width / paras.cell_length[0] * ((ds.tree.half_width - paras.max_ghost_zone_width) / ds.tree.half_width), 2.0));
+        }
         if (ds.particle_set.num_particles >= 4 * horizontal_resolution) {
-            if (!progIO->numerical_parameters.fixed_num_neighbors_to_hop) {
+            if (!paras.fixed_num_neighbors_to_hop) {
                 if (ds.particle_set.num_particles >= 1.67e7) { // 4096^2=16777216
-                    progIO->numerical_parameters.num_neighbors_to_hop = 64;
+                    paras.num_neighbors_to_hop = 64;
                 } else if (ds.particle_set.num_particles >= 2.68e8) { // 16384^2=268435456
-                    progIO->numerical_parameters.num_neighbors_to_hop = 128;
+                    paras.num_neighbors_to_hop = 128;
                 }
             } else {
-                if (ds.particle_set.num_particles >= 1.67e7 &&
-                    progIO->numerical_parameters.num_neighbors_to_hop < 64) {
-                    progIO->log_info << "The number of particles retrieved from data is quite a lot, " << ds.particle_set.num_particles << ", you may want to set a larger num_neighbors_to_hop by specifying \"hop\" in the parameter input file (current value is " << progIO->numerical_parameters.num_neighbors_to_hop << ")." << std::endl;
-                    progIO->Output(std::cout, progIO->log_info, __normal_output, __master_only);
-                } else if (ds.particle_set.num_particles >= 2.68e8 &&
-                    progIO->numerical_parameters.num_neighbors_to_hop < 128) {
-                    progIO->log_info << "The number of particles retrieved from data is quite a lot, " << ds.particle_set.num_particles << ", you may want to set a larger num_neighbors_to_hop by specifying \"hop\" in the parameter input file (current value is " << progIO->numerical_parameters.num_neighbors_to_hop << ")." << std::endl;
+                if ( (ds.particle_set.num_particles >= 1.67e7
+                      && paras.num_neighbors_to_hop < 64)
+                     || (ds.particle_set.num_particles >= 2.68e8
+                         && paras.num_neighbors_to_hop < 128) ) {
+                    progIO->log_info << "The number of particles retrieved from data is quite a lot, " << ds.particle_set.num_particles << ", you may want to set a larger num_neighbors_to_hop by specifying \"hop\" in the parameter input file (current value is " << paras.num_neighbors_to_hop << ")." << std::endl;
                     progIO->Output(std::cout, progIO->log_info, __normal_output, __master_only);
                 }
             }
@@ -3331,6 +3563,20 @@ public:
          * for now we use 2 * rho_crit as a threshold
          */
         ds.planetesimal_list.density_threshold = std::pow(progIO->numerical_parameters.Omega, 2.) / progIO->numerical_parameters.PI / progIO->numerical_parameters.grav_constant * 2.; // = 160 for the fiducial run
+        // if the # of particles is low (m_par is large), we'd better use 9 * rho_0 / tilde_G
+        if (progIO->numerical_parameters.mass_total_code_units / ds.particle_set.num_particles / progIO->numerical_parameters.cell_volume >  ds.planetesimal_list.density_threshold / 4) {
+            ds.planetesimal_list.density_threshold *= 9. / 8.;
+        }
+        // if the hydro-resolution is low (coarse FFT-solver => particles not highly concentrated)
+        // we need to avoid diffuse particle groups (diffuse like randomly distributed)
+        auto resolution = (progIO->numerical_parameters.box_resolution / progIO->numerical_parameters.box_length).MinElement();
+        if (resolution <= 640) {
+            ds.planetesimal_list.clump_diffuse_threshold = 0.35;
+        } else if (resolution <= 1280) {
+            ds.planetesimal_list.clump_diffuse_threshold = 0.4;
+        } else if (resolution <= 2000) {
+            ds.planetesimal_list.clump_diffuse_threshold = 0.5;
+        }
         // and we are looking for clumps with certain mass_crit & peak_rho_crit
         ds.planetesimal_list.clump_mass_threshold = progIO->numerical_parameters.min_trusted_mass_code_unit;
         ds.planetesimal_list.peak_density_threshold = 3 * ds.planetesimal_list.density_threshold; // from HOP's experience (ref: https://www.cfa.harvard.edu/~deisenst/hop/hop_doc.html)
@@ -3487,14 +3733,22 @@ public:
         mask.clear();
         for (auto &it : ds.planetesimal_list.planetesimals) {
             it.second.SortParticles(particle_list);
+            if (it.second.IsPositionDispersion2Large(ds.planetesimal_list.clump_diffuse_threshold)) {
+                peaks_to_be_deleted.push_back(it.first);
+            }
         }
-        ds.planetesimal_list.num_planetesimals = ds.planetesimal_list.planetesimals.size();
+        for (auto it : peaks_to_be_deleted) {
+            ds.planetesimal_list.planetesimals.erase(it);
+        }
+        peaks_to_be_deleted.resize(0);
+        ds.planetesimal_list.num_planetesimals = static_cast<uint32_t>(ds.planetesimal_list.planetesimals.size());
 
         /* With certain parameters, there will be A LOT clumps all over the computational domain. Hopping will also identify very loose associations, where particle densities are marginally higher than the threshold. Such associations are in fact sparse collections of a few particles. For efficiency, we remove them immediately.
          * RL update: For the complete version of particle data, the number of particles is so large that the hopping step need a large value of num_neighbors_to_hop to identify meaningful loose associations (like sub-sample). */
         if (enough_particle_resolution_flag == 0) {
             RemoveSmallMassAndLowPeak(ds);
         }
+        ds.planetesimal_list.num_planetesimals = static_cast<uint32_t>(ds.planetesimal_list.planetesimals.size());
         progIO->log_info << "Hopping to peaks done, naive peak amount = " << ds.planetesimal_list.planetesimals.size() << "; ";
 
         // RL: debug use -- print out particle groups' properties after hopping and before merging
@@ -3520,184 +3774,148 @@ public:
 
         /////////////////////////////////////////////////////
         // 4, merge bound clumps
-        // RL: the order of the iterations through an unordered_map is not guaranteed to be the same. So don't count on it. In the merging process, it could be "A" eats "B" or "B" eats "A", which depends on who come first. But it does not affect the final results.
-        // RL update: I switched to ordered_map for better cross-platform/compiler consistency
-        // \todo: use clump_tree to simplify this merging step
-        mask.resize(ds.planetesimal_list.planetesimals.size());
-        mask.set();
-
-        //int merging_count = 0, merging_event_count = 0;
         int merge_happened_flag = 1;
-        using planetesimal_iterator = decltype(ds.planetesimal_list.planetesimals.begin());
-        std::vector<std::pair<planetesimal_iterator, planetesimal_iterator>> merging_pairs;
-        std::vector<std::pair<planetesimal_iterator, std::vector<planetesimal_iterator>>> combined_merging_pairs;
+        double max_radius = 0.;
+        uint32_t *nearby_mask;
+        int merging_count = 0, delete_count = 0, predator_count = 0;
+        using pl_iterator = decltype(ds.planetesimal_list.planetesimals.begin());
+        std::vector<pl_iterator> nearby_pi;
+        std::vector<std::pair<pl_iterator, pl_iterator>> merging_pairs;
+        std::vector<std::pair<pl_iterator, std::vector<pl_iterator>>> combined_merging_pairs;
+        nearby_pi.resize(ds.planetesimal_list.planetesimals.size());
+        merging_pairs.resize(ds.planetesimal_list.num_planetesimals);
+        combined_merging_pairs.resize(ds.planetesimal_list.num_planetesimals);
+        peaks_to_be_deleted.resize(ds.planetesimal_list.num_planetesimals);
 
-        // we indeed need this since one loop of merging may not be enough
-        // some clump will grow during merging, but they will miss some clumps at front of the iteration
         while (merge_happened_flag) {
+            // Build Clump Tree every time is necessary
+            ds.planetesimal_list.BuildClumpTree(root_center, half_width, max_radius);
             merge_happened_flag = 0;
-            merging_pairs.resize(0);
-            combined_merging_pairs.resize(0);
-
-//#define OpenMP_Test
-#ifdef OpenMP_Test
+            merging_count = 0;
+            predator_count = 0;
+            nearby_mask = new uint32_t[ds.planetesimal_list.num_planetesimals]();
+#ifdef OpenMP_ON
             omp_set_num_threads(progIO->numerical_parameters.num_avail_threads);
 #pragma omp parallel
+#endif
             {
-                int omp_myid = omp_get_thread_num();
-                const int omp_num_threads = omp_get_num_threads();
-                int step_to_advance = omp_num_threads;
-                decltype(merging_pairs) tmp_merging_pairs;
-                decltype(peaks_to_be_deleted) tmp_peaks_to_be_deleted;
-#else // OpenMP_Test
-                int step_to_advance = 1;
-                decltype(merging_pairs) &tmp_merging_pairs = merging_pairs;
-                decltype(peaks_to_be_deleted) &tmp_peaks_to_be_deleted = peaks_to_be_deleted;
-#endif // OpenMP_Test
                 auto tmp_p1 = ds.planetesimal_list.planetesimals.begin();
                 auto tmp_p2 = tmp_p1;
-                unsigned int tmp_p1_mask = 0;
                 double r_p1 = 0, r_p2 = 0, center_dist = 0;
+                uint32_t nearby_count = 0;
+                auto *nearby_indices = new uint32_t[ds.planetesimal_list.planetesimals.size()];
 
-                while (tmp_p1 != ds.planetesimal_list.planetesimals.end()) {
+                for (tmp_p1 = ds.planetesimal_list.planetesimals.begin(); tmp_p1 != ds.planetesimal_list.planetesimals.end(); tmp_p1++) {
                     r_p1 = tmp_p1->second.one10th_radius;
-
-                    if (mask[tmp_p1_mask]) {
-
-                        tmp_p2 = tmp_p1; // ds.planetesimal_list.planetesimals.begin();
-                        tmp_p2++;
-                        auto tmp_p2_mask = tmp_p1_mask+1; // 0
-#ifdef OpenMP_Test
-                        std::advance(tmp_p2, omp_myid);
-                        tmp_p2_mask += omp_myid;
-#endif // OpenMP_Test
-                        while (tmp_p2_mask < ds.planetesimal_list.planetesimals.size()) {
-                            if (!mask[tmp_p2_mask] || tmp_p2_mask == tmp_p1_mask) { // shouldn't ==
-                                tmp_p2_mask += step_to_advance;
-                                std::advance(tmp_p2, step_to_advance);
+                    if (tmp_p1->second.mask) {
+                        // BallSearch does not sort the results, don't assume 1st one is itself
+                        ds.planetesimal_list.clump_tree.BallSearch(tmp_p1->second.center_of_mass, tmp_p1->second.one10th_radius+max_radius, nearby_indices, nearby_count);
+#ifdef OpenMP_ON
+#pragma omp for
+#endif
+                        for (size_t idx = 0; idx < nearby_count; idx++) {
+                            uint32_t tmp_p2_id = ds.planetesimal_list.clump_set[ ds.planetesimal_list.clump_tree.particle_list[nearby_indices[idx]].original_id ].id;
+                            if (tmp_p2_id == tmp_p1->first) {
                                 continue;
                             }
+                            tmp_p2 = ds.planetesimal_list.planetesimals.find(tmp_p2_id);
+                            if (tmp_p2 != ds.planetesimal_list.planetesimals.end()) {
 
-                            r_p2 = tmp_p2->second.one10th_radius;
-                            center_dist = (tmp_p1->second.center_of_mass - tmp_p2->second.center_of_mass).Norm();
-
-                            if (center_dist < std::max(r_p1, r_p2)) {
-                                // one contains the center of another, just merge
-                                tmp_merging_pairs.push_back(std::make_pair(tmp_p1, tmp_p2));
-                                merge_happened_flag = 1;
-                                mask[tmp_p2_mask].flip();
-                                tmp_peaks_to_be_deleted.push_back(tmp_p2->first);
-                            } else if (center_dist < (r_p1 + r_p2) && ds.planetesimal_list.IsGravitationallyBound(tmp_p1->second, tmp_p2->second)) {
-                                // they intersect and bound
-                                if (!ds.planetesimal_list.IsSaddlePointDeepEnough(ds, DensityKernel, tmp_p1->second, tmp_p2->second)) {
-                                    tmp_merging_pairs.push_back(std::make_pair(tmp_p1, tmp_p2));
-                                    merge_happened_flag = 1;
-                                    mask[tmp_p2_mask].flip();
-                                    tmp_peaks_to_be_deleted.push_back(tmp_p2->first);
+                                if (tmp_p2->second.mask) {
+                                    r_p2 = tmp_p2->second.one10th_radius;
+                                    center_dist = (tmp_p1->second.center_of_mass - tmp_p2->second.center_of_mass).Norm();
+                                    if (center_dist < std::max(r_p1, r_p2)) {
+                                        // one contains the center of another, just merge
+                                        nearby_mask[idx] = 1;
+                                        nearby_pi[idx] = tmp_p2;
+                                        tmp_p2->second.mask = false;
+                                    } else if (center_dist < (r_p1 + r_p2) && ds.planetesimal_list.IsGravitationallyBound(tmp_p1->second, tmp_p2->second)) {
+                                        // they intersect and bound
+                                        if (!ds.planetesimal_list.IsSaddlePointDeepEnough(ds, DensityKernel, tmp_p1->second, tmp_p2->second)) {
+                                            nearby_mask[idx] = 1;
+                                            nearby_pi[idx] = tmp_p2;
+                                            tmp_p2->second.mask = false;
+                                        }
+                                    }
                                 }
+                            } else {
+                                progIO->error_message << "Error: Cannot find a clump with peak_id=" << tmp_p2_id << ". This should not happen. Please report a bug. Proceed for now." << std::endl;
+                                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
                             }
-                            // currently we don't merge other cases
-                            tmp_p2_mask += step_to_advance;
-                            std::advance(tmp_p2, step_to_advance);
                         }
                     }
-#ifdef OpenMP_Test
+#ifdef OpenMP_ON
 #pragma omp barrier
+#pragma omp single
 #endif
-                    tmp_p1++;
-                    tmp_p1_mask++;
+                    {
+                        for (size_t idx = 0; idx < nearby_count; idx++) {
+                            if (nearby_mask[idx]) {
+                                merging_pairs[merging_count].first = tmp_p1;
+                                merging_pairs[merging_count].second = nearby_pi[idx];
+                                merging_count++;
+                                peaks_to_be_deleted[delete_count] = nearby_pi[idx]->first;
+                                delete_count++;
+                                nearby_mask[idx] = 0;
+                            }
+                        }
+                        if (merging_count > 0) {
+                            merge_happened_flag = 1;
+                        }
+                    }
                 }
-#ifdef OpenMP_Test
-#pragma omp critical
+                delete [] nearby_indices;
+#ifdef OpenMP_ON
+#pragma omp single
+#endif
                 {
-                    //std::cout << "I'm thread " << omp_myid << ": I have " << tmp_merging_pairs.size() << " pairs." << std::endl;
-                    merging_pairs.insert(merging_pairs.end(), tmp_merging_pairs.begin(), tmp_merging_pairs.end());
-                    peaks_to_be_deleted.insert(peaks_to_be_deleted.end(), tmp_peaks_to_be_deleted.begin(), tmp_peaks_to_be_deleted.end());
-                };
-
-#pragma omp barrier
-#pragma omp master
-                {
-                    //std::cout << "merging_pairs.size() = " << merging_pairs.size() << std::endl;
-                    std::sort(merging_pairs.begin(), merging_pairs.end(), [](const std::pair<decltype(tmp_p1), decltype(tmp_p2)> &a, const std::pair<decltype(tmp_p1), decltype(tmp_p2)> &b) {
-                        //if (a.first->first == b.first->first) {
-                        //    return a.second->first < b.second->first;
-                        //}
-                        return a.first->first < b.first->first;
-                    });
-                    std::vector<decltype(tmp_p2)> preys;
-                    auto idx_limit = merging_pairs.size()-1;
-                    for (unsigned int idx = 0; idx != merging_pairs.size(); ) {
+                    std::vector<decltype(ds.planetesimal_list.planetesimals.begin())> preys;
+                    auto idx_limit = merging_count-1;
+                    for (unsigned int idx = 0; idx != merging_count; ) {
                         preys.resize(0);
                         preys.push_back(merging_pairs[idx].second);
                         while (idx < idx_limit && merging_pairs[idx].first->first == merging_pairs[idx+1].first->first) {
                             preys.push_back(merging_pairs[idx+1].second);
                             idx++;
                         }
-                        combined_merging_pairs.push_back(std::make_pair(merging_pairs[idx].first, preys));
+                        combined_merging_pairs[predator_count] = std::make_pair(merging_pairs[idx].first, preys);
+                        predator_count++;
                         idx++;
                     }
-                    //merging_event_count = 0;
-                };
-#pragma omp barrier
-#pragma omp for //reduction(+ : merging_event_count)
-                for (uint32_t i = 0; i < combined_merging_pairs.size(); i++) {
+                }
+#ifdef OpenMP_ON
+#pragma omp for
+#endif
+                for (uint32_t i = 0; i < predator_count; i++) {
                     for (auto &it : combined_merging_pairs[i].second) {
-                        //merging_event_count += 1;
                         combined_merging_pairs[i].first->second.MergeAnotherPlanetesimal(it->second, particle_list);
                     }
                 }
-#else // OpenMP_Test
-            /* RL: sort is only needed for comparing with OpenMP_Test
-            std::cout << "merging_pairs.size() = " << merging_pairs.size() << std::endl;
-            std::sort(merging_pairs.begin(), merging_pairs.end(), [](const std::pair<decltype(tmp_p1), decltype(tmp_p2)> &a, const std::pair<decltype(tmp_p1), decltype(tmp_p2)> &b) {
-                if (a.first->first == b.first->first) {
-                    return a.second->first < b.second->first;
-                }
-                return a.first->first < b.first->first;
-            }); //*/
-
-            std::vector<decltype(tmp_p2)> preys;
-            auto idx_limit = merging_pairs.size()-1;
-            for (unsigned int idx = 0; idx != merging_pairs.size(); ) {
-                preys.resize(0);
-                preys.push_back(merging_pairs[idx].second);
-                while (idx < idx_limit && merging_pairs[idx].first->first == merging_pairs[idx+1].first->first) {
-                    preys.push_back(merging_pairs[idx+1].second);
-                    idx++;
-                }
-                combined_merging_pairs.push_back(std::make_pair(merging_pairs[idx].first, preys));
-                idx++;
             }
-            //merging_event_count = 0;
-#ifdef OpenMP_ON
-#pragma omp parallel for //reduction(+ : merging_event_count)
-#endif
-            for (uint32_t i = 0; i < combined_merging_pairs.size(); i++) {
-                for (auto &it : combined_merging_pairs[i].second) {
-                    //merging_event_count += 1;
-                    combined_merging_pairs[i].first->second.MergeAnotherPlanetesimal(it->second, particle_list);
+            delete [] nearby_mask;
+            for (auto &it : ds.planetesimal_list.planetesimals) {
+                if (it.second.mask) {
+                    if (it.second.IsPositionDispersion2Large()) {
+                        it.second.mask = false;
+                        peaks_to_be_deleted[delete_count] = it.first;
+                        delete_count++;
+                    }
                 }
             }
-#endif // OpenMP_Test
-
-#ifdef OpenMP_Test
-            }
-#endif
+            ds.planetesimal_list.num_planetesimals = ds.planetesimal_list.planetesimals.size() - delete_count;
             /* RL: debug use
-            std::cout << "peaks to be deleted now equals " << peaks_to_be_deleted.size() << std::endl;
-            merging_count++;
-            std::cout << "merging performed " << merging_event_count << " times" << std::endl;
-            OutputNaivePeakList(ds, "naive_peak_list_v"+std::to_string(merging_count)+".txt", mask);
+            std::cout << "peaks to be deleted now equals " << delete_count << std::endl;
+            std::cout << "merging performed " << merging_count << " times" << std::endl;
             //*/
-
         }
 
         for (auto it : peaks_to_be_deleted) {
             ds.planetesimal_list.planetesimals.erase(it);
         }
+        merging_pairs.resize(0);
+        combined_merging_pairs.resize(0);
         peaks_to_be_deleted.resize(0);
-        mask.clear();
+        nearby_pi.resize(0);
 
         // put real peak indices into keys
         // \todo: if this happens, I also need to change the potential_subpeak_indices
@@ -3793,12 +4011,12 @@ public:
 
         /////////////////////////////////////////////////////
         // 9, remove those planetesimals that locate at ghost zones
-        for (auto it : ds.planetesimal_list.planetesimals) {
+        for (auto &it : ds.planetesimal_list.planetesimals) {
             if (!it.second.center_of_mass.InRange(progIO->numerical_parameters.box_min, progIO->numerical_parameters.box_max)) {
                 peaks_to_be_deleted.push_back(it.first);
             }
         }
-        for (auto it : peaks_to_be_deleted) {
+        for (auto &it : peaks_to_be_deleted) {
             ds.planetesimal_list.planetesimals.erase(it);
         }
         peaks_to_be_deleted.resize(0);
@@ -3828,7 +4046,7 @@ public:
         // Before ending, output some info
         if (ds.planetesimal_list.num_planetesimals > 0) {
             // construct "peaks_and_masses" in order to sort clumps by mass
-            for (auto it : ds.planetesimal_list.planetesimals) {
+            for (auto &it : ds.planetesimal_list.planetesimals) {
                 ds.planetesimal_list.peaks_and_masses.push_back(std::pair<uint32_t, double>(it.first, it.second.total_mass));
             }
             std::sort(ds.planetesimal_list.peaks_and_masses.begin(), ds.planetesimal_list.peaks_and_masses.end(), [](const std::pair<uint32_t, double> &a, const std::pair<uint32_t, double> &b) {
@@ -3863,7 +4081,7 @@ public:
             progIO->out_content << "found zero clumps";
         }
         if (loop_count >= 0) { // RL: input negative loop_count for test purpose
-            ds.planetesimal_list.OutputPlanetesimalsInfo(loop_count, ds.tree, ds.particle_set);
+            ds.planetesimal_list.OutputPlanetesimalsInfo(loop_count, ds);
         }
 
         // \todo: think about small-passing-by-clumps --> they are very weakly-bound with the big one while embeded in it
@@ -3901,6 +4119,10 @@ public:
     /*! \var std::vector<uint32_t> indices
      *  \brief indices of particles that belongs to this planetesimals */
     std::vector<uint32_t> indices;
+
+    /*! \var bool mask
+     *  \brief its mask for selection process */
+    bool mask {true};
 
     /*! \var double mass
      *  \brief total mass */
@@ -4045,6 +4267,12 @@ public:
         }
     }
 
+    /*! \fn bool IsPositionDispersion2Large(double tolerance)
+     *  \brief By examining the ratio of position dispersion over max(dist_to_COM), we may be able to remove some diffuse particle groups. From experiments, I found a concentrated particle group usually has such a ratio below 0.4, a stream-like particle group could have 0.5-ish, a randomly-distributed group will give ~0.6. */
+    bool IsPositionDispersion2Large(double tolerance=0.55) {
+        return std::accumulate(particles.begin(), particles.end(), 0.0, [](const double &a, const std::pair<uint32_t, double> &b) { return a + b.second*b.second; }) / particles.size() > std::pow(tolerance * particles.back().second, 2);
+    }
+
     /*! \fn void MergeAnotherPlanetesimal(Planetesimal<D> carnivore, typename BHtree<D>::InternalParticle *particle_list)
      *  \brief take another planetesimal's data */
     void MergeAnotherPlanetesimal(Planetesimal<D> &carnivore, typename BHtree<D>::InternalParticle *particle_list) {
@@ -4059,20 +4287,13 @@ public:
         vel_com = (vel_com * total_mass + carnivore.vel_com * carnivore.total_mass) / tmp_total_mass;
         total_mass = tmp_total_mass;
 
-        std::vector<std::pair<uint32_t, double>> tmp_particles;
-        tmp_particles.resize(particles.size() + carnivore.particles.size());
-        std::merge(particles.begin(), particles.end(), carnivore.particles.begin(), carnivore.particles.end(), tmp_particles.begin(), [](const std::pair<uint32_t, double> &a, const std::pair<uint32_t, double> &b) {
-            return a.second < b.second;
-        });
-
-        for (auto &it : tmp_particles) {
+        particles.insert(particles.end(), carnivore.particles.begin(), carnivore.particles.end());
+        for (auto &it : particles) {
             it.second = (particle_list[it.first].pos - center_of_mass).Norm();
         }
-        std::sort(tmp_particles.begin(), tmp_particles.end(), [](const std::pair<uint32_t, double> &a, const std::pair<uint32_t, double> &b) {
+        std::sort(particles.begin(), particles.end(), [](const std::pair<uint32_t, double> &a, const std::pair<uint32_t, double> &b) {
             return a.second < b.second;
         });
-
-        particles.swap(tmp_particles);
 
         // copy indices (do we really need it?)
         indices.resize(particles.size());
@@ -4201,6 +4422,7 @@ public:
     /*! \fn void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree, double density_threshold)
      *  \brief search potential bound particles within Hill radius */
     void SearchBoundParticlesWithinHillRadius(BHtree<D> &tree, double density_threshold) {
+        // \todo should consider only particles within half the Hill radius
         uint32_t nearby_count = 0, idx = 0;
         tree.RecursiveBallSearchCount(center_of_mass, tree.root, Hill_radius, nearby_count);
         auto *nearby_indices = new uint32_t[nearby_count];
@@ -4272,7 +4494,7 @@ public:
 
     /*! \fn void void CalculateCumulativeAngularMomentum(BHtree<D> &tree, std::ofstream &f)
      *  \brief calculate the cumulative angular momentum inside out in Hill units */
-    void CalculateCumulativeAngularMomentum(BHtree<D> &tree, std::ofstream &f) {
+    void CalculateCumulativeAngularMomentum(BHtree<D> &tree, uint32_t id_peak, std::ofstream &f) {
         SmallVec<double, D> tmp_j {0};
         SmallVec<double, D> tmp_dr {0};
         SmallVec<double, D> tmp_dv {0};
@@ -4316,7 +4538,7 @@ public:
 
         //f << std::defaultfloat << indices.size() << std::endl; // std::defaultfloat not supported in GCC 4.9.4
         f.unsetf(std::ios_base::floatfield);
-        f << indices.size() << std::endl;
+        f << id_peak << ' ' << indices.size() << std::endl;
         idx = 0;
         for (auto it : particles) {
             if (idx > 0) {
@@ -4352,6 +4574,10 @@ public:
      *  \brief the mass criterion for removing weak clumps */
     double clump_mass_threshold {0};
 
+    /*! \var double clump_diffuse_threshold
+     *  \brief the diffuse threshold for a particle group; input for IsPositionDispersion2Large() */
+    double clump_diffuse_threshold {0.55};
+
     /*! \var double peak_density_threshold
      *  \brief the density criterion for peak densities of planetesimals (rho_crit for the particle with the highest density) */
     double peak_density_threshold {0};
@@ -4362,8 +4588,13 @@ public:
 
     /*! \var std::map<uint32_t, Planetesimal>
      *  \brief a map pairing the peak particle indices with planetesimal structures
-     *  This STL container, unordered_map, is suitable for quick-access by key values (with its internal hash table), which is very useful during grouping particles by those peak-density-particles since many partcle-hopping-chains belongs to one ultimate peak-density-particle. In addition, it uses non-contiguous memory which fits our needs because the object Planetesimal requires a lot of changes in size during unbinding processes. */
+     *  This STL container, unordered_map, is suitable for quick-access by key values (with its internal hash table), which is very useful during grouping particles by those peak-density-particles since many partcle-hopping-chains belongs to one ultimate peak-density-particle. In addition, it uses non-contiguous memory which fits our needs because the object Planetesimal requires a lot of changes in size during unbinding processes.
+     *  RL: the order of the iterations through an unordered_map is not guaranteed to be the same. So don't count on it during the merging process. It could be "A" eats "B" or "B" eats "A", which depends on who comes first. I switched to ordered_map for better cross-platform/compiler consistency. Keep in mind that iterating through an ordered_map always follows the non-descending order of keys. */
     std::map<uint32_t, Planetesimal<D>> planetesimals;
+
+    /*! \var ParticleSet<D> clump_set
+     *  \brief like particle_set, used in building clump_tree */
+    ParticleSet<D> clump_set;
 
     /*! \var BHtree<D> clump_tree
      *  \brief put clumps into tree structures for easier manipulations */
@@ -4409,6 +4640,28 @@ public:
         }
     }
 
+    template <class T>
+    bool IsPhaseSpaceDistanceWithinTenSigma(DataSet<T, D> &ds, const Planetesimal<D> &p1, const Planetesimal<D> &p2) {
+        const Planetesimal<D> &small_p = (p1.total_mass > p2.total_mass)? p2 : p1;
+        const Planetesimal<D> &large_p = (p1.total_mass > p2.total_mass)? p1 : p2;
+        double sigma2_pos = 0, sigma2_vel = 0, small_n = small_p.particles.size();
+        double phase_dist2 = 0;
+        typename BHtree<D>::InternalParticle *p;
+        for (auto &par: small_p.particles) {
+            sigma2_pos += par.second*par.second;
+            p = &ds.tree.particle_list[par.first];
+            sigma2_vel += (p->vel - small_p.vel_com - progIO->numerical_parameters.shear_vector * (p->pos[0] - small_p.center_of_mass[0]) ).Norm2();
+            //sigma2_vel += (p->vel - small_p.vel_com).Norm2();
+        }
+        sigma2_pos /= small_n;
+        sigma2_vel /= small_n;
+
+        phase_dist2 = (large_p.center_of_mass - small_p.center_of_mass).Norm2() / (sigma2_pos / small_n)
+                     +(large_p.vel_com - small_p.vel_com - progIO->numerical_parameters.shear_vector
+                     * (large_p.center_of_mass[0] - small_p.center_of_mass[0])).Norm2() / (sigma2_vel / small_n);
+        return phase_dist2 < 200.; // (10*sqrt(2))^2
+    }
+
     /*! \fn void WriteBasicResults(int loop_count)
      *  \brief write basic peak-finding results into one file */
     void WriteBasicResults(int loop_count) {
@@ -4420,7 +4673,7 @@ public:
 
         progIO->out_content <<  std::setw(progIO->width) << std::setfill(' ') << std::scientific << progIO->physical_quantities[loop_count].time;
         progIO->out_content << std::setw(progIO->width) << std::setfill(' ') << num_planetesimals;
-        for (auto it : planetesimals) {
+        for (auto &it : planetesimals) {
             progIO->physical_quantities[loop_count].max_planetesimal_mass = std::max(progIO->physical_quantities[loop_count].max_planetesimal_mass, it.second.total_mass);
             progIO->physical_quantities[loop_count].total_planetesimal_mass += it.second.total_mass;
         }
@@ -4431,9 +4684,10 @@ public:
         mpi->WriteSingleFile(mpi->result_files[mpi->file_pos[progIO->file_name.planetesimals_file]], progIO->out_content, __all_processors);
     }
 
-    /*! \fn void OutputPlanetesimalsInfo(int loop_count, BHtree<D> &tree, ParticleSet<D> &particle_set)
+    /*! \fn void OutputPlanetesimalsInfo(int loop_count, DataSet<T, D> &ds)
      *  \brief output the kinematic info of planetesimals */
-    void OutputPlanetesimalsInfo(int loop_count, BHtree<D> &tree, ParticleSet<D> &particle_set) {
+    template <class T>
+    void OutputPlanetesimalsInfo(int loop_count, DataSet<T, D> &ds) {
         std::ofstream file_planetesimals;
         std::ostringstream tmp_ss;
         tmp_ss << std::setprecision(3) << std::fixed << std::setw(7) << std::setfill('0') << progIO->physical_quantities[loop_count].time;
@@ -4455,11 +4709,11 @@ public:
         file_planetesimals << std::setw(24) << "# center_of_mass[x]" << std::setw(24) << "center_of_mass[y]" << std::setw(24) << "center_of_mass[z]" << std::setw(10) << "peak_id" << std::setw(24) << "<-its_rho" << std::setw(10) << "Npar" << std::setw(24) << "total_mass" << std::setw(24) << "Hill_radius" << std::setw(24) << "max(dist2COM)" << std::setw(24) << "total_mass/volume_by_max_dist2COM" << std::endl;
         for (auto peak : peaks_and_masses) {
             auto it = planetesimals.find(peak.first);
-            file_planetesimals << std::setprecision(16) << std::setw(24) << it->second.center_of_mass[0] << std::setw(24) << it->second.center_of_mass[1] << std::setw(24) << it->second.center_of_mass[2] << std::setw(10) << it->first << std::setw(24) << tree.particle_list[it->first].new_density;
+            file_planetesimals << std::setprecision(16) << std::setw(24) << it->second.center_of_mass[0] << std::setw(24) << it->second.center_of_mass[1] << std::setw(24) << it->second.center_of_mass[2] << std::setw(10) << it->first << std::setw(24) << ds.tree.particle_list[it->first].new_density;
             auto tmp_num_particles = it->second.indices.size();
             for (auto item : it->second.indices) {
-                auto tmp_it = tree.sink_particle_indices.find(item);
-                if (tmp_it != tree.sink_particle_indices.end()) {
+                auto tmp_it = ds.tree.sink_particle_indices.find(item);
+                if (tmp_it != ds.tree.sink_particle_indices.end()) {
                     tmp_num_particles += tmp_it->second.size()-1;
                 }
             }
@@ -4489,11 +4743,19 @@ public:
             auto it = planetesimals.find(peak.first);
             auto tmp_num_particles = it->second.indices.size();
             for (auto item : it->second.indices) {
-                auto tmp_it = tree.sink_particle_indices.find(item);
-                if (tmp_it != tree.sink_particle_indices.end()) {
+                auto tmp_it = ds.tree.sink_particle_indices.find(item);
+                if (tmp_it != ds.tree.sink_particle_indices.end()) {
                     tmp_num_particles += tmp_it->second.size()-1;
                 }
             }
+            /* RL: output the cumulative angular momentum inside out
+            std::ofstream cumulative_file("cumulative_Jz.txt", std::ofstream::out | std::ofstream::app);
+            if (!cumulative_file.is_open()) {
+                std::cout << "Fail to open cumulative_Jz.txt" << std::endl;
+            }
+            it->second.CalculateCumulativeAngularMomentum(ds.tree, it->first, cumulative_file);
+            cumulative_file.close();
+            //*/
             file_planetesimals << std::setw(12) << it->first << std::setw(12) << tmp_num_particles
                                << std::setprecision(16)
                                << std::setw(24) << it->second.total_mass
@@ -4511,12 +4773,15 @@ public:
                                //<< std::setw(24) << it->second.accumulated_J_in_quarter_Hill_radius[1]
                                //<< std::setw(24) << it->second.accumulated_J_in_quarter_Hill_radius[2]
                                << std::endl;
+            // RL: output the particle list of every clump
+            //OutputSinglePlanetesimal("clump_parlist/"+std::to_string(it->first)+".txt", it->first, ds);
         }
         file_planetesimals.close(); //*/
 
         return ;
 
         // todo: after revealing sub-clumps, we need to output them hierarchically
+        /* RL: output all clumps and their particle lists in one file
         std::ofstream file_parlist;
         tmp_file_name = progIO->file_name.output_file_path.substr(0, progIO->file_name.output_file_path.find_last_of('/'))+std::string("/parlist_")+tmp_ss.str()+std::string(".txt");
         file_parlist.open(tmp_file_name);
@@ -4526,27 +4791,28 @@ public:
         }
 
         file_parlist << planetesimals.size() << std::endl; // (1), # of planetesimals
-        for (auto it : planetesimals) {
+        for (auto &it : planetesimals) {
             auto tmp_num_particles = it.second.indices.size();
             for (auto item : it.second.indices) {
-                auto tmp_it = tree.sink_particle_indices.find(item);
-                if (tmp_it != tree.sink_particle_indices.end()) {
+                auto tmp_it = ds.tree.sink_particle_indices.find(item);
+                if (tmp_it != ds.tree.sink_particle_indices.end()) {
                     tmp_num_particles += tmp_it->second.size()-1;
                 }
             }
             file_parlist << tmp_num_particles << std::endl; // (2) # of particles
             for (auto item : it.second.indices) {
-                auto tmp_it = tree.sink_particle_indices.find(item);
-                if (tmp_it != tree.sink_particle_indices.end()) {
+                auto tmp_it = ds.tree.sink_particle_indices.find(item);
+                if (tmp_it != ds.tree.sink_particle_indices.end()) {
                     for (auto parid : tmp_it->second) {
-                        file_parlist << particle_set[parid].id << std::endl;
+                        file_parlist << ds.particle_set[parid].id << std::endl;
                     }
                 } else {
-                    file_parlist << particle_set[tree.particle_list[item].original_id].id << std::endl;
+                    file_parlist << ds.particle_set[ds.tree.particle_list[item].original_id].id << std::endl;
                 }
             }
         }
         file_parlist.close();
+        //*/
     }
 
     /*! \fn template<class T> void OutputSinglePlanetesimal(std::string file_name, uint32_t peak_id, DataSet<T, D> &ds)
@@ -4753,26 +5019,36 @@ public:
         } // if (tmp_planetesimal != ds.planetesimal_list.planetesimals.end())
     }
 
-    /*! \fn void BuildClumpTree()
+    /*! \fn void BuildClumpTree(sn::dvec root_center, double half_width, double &max_radius)
      *  \brief put planetesimals into tree structures */
-    void BuildClumpTree() {
-        ParticleSet<D> clump_set;
+    void BuildClumpTree(sn::dvec &root_center, double half_width, double &max_radius) {
+        clump_set.Reset();
         clump_set.num_total_particles = static_cast<uint32_t>(num_planetesimals);
         clump_set.num_particles = static_cast<uint32_t>(num_planetesimals);
         clump_set.AllocateSpace(clump_set.num_total_particles);
 
         uint32_t tmp_id = 0;
         Particle<D> *p;
-        for (auto it : planetesimals) {
-            p = &clump_set[tmp_id];
-            p->pos = it.second.center_of_mass;
-            p->vel = it.second.vel_com;
-            p->id = it.first;
-            p->density = it.second.Hill_radius; // use density to store Hill radii
-            p->property_index = 0; // has no meaning, N.B., tmp_ds.tree does not have correct mass data
-            tmp_id++;
+        for (auto &it : planetesimals) {
+            if (it.second.mask) {
+                p = &clump_set[tmp_id];
+                p->pos = it.second.center_of_mass;
+                p->vel = it.second.vel_com;
+                p->id = it.first;
+                p->density = it.second.Hill_radius; // use density to store Hill radii
+                p->property_index = 0; // has no meaning, N.B., tmp_ds.tree does not have correct mass data
+                tmp_id++;
+                max_radius = MaxOf(it.second.one10th_radius, max_radius);
+            }
         }
-        clump_tree.BuildTree(progIO->numerical_parameters, clump_set, true);
+
+        // build a clump tree in an overlapping spatial volume
+        clump_tree.root_center = root_center;
+        clump_tree.half_width = half_width;
+        clump_tree.BuildTree(progIO->numerical_parameters, clump_set, true, false);
+        if (clump_tree.sink_particle_indices.size() > 0) {
+            progIO->log_info << "(Warning: got " << clump_tree.sink_particle_indices.size() << " sink clumps while building clump tree. Proceed for now.)";
+        }
     }
 
     /*! \fn void SearchBinaryPlanetesimals(int loop_count)
@@ -4786,7 +5062,7 @@ public:
 
         uint32_t tmp_id = 0;
         Particle<D> *p;
-        for (auto it : planetesimals) {
+        for (auto &it : planetesimals) {
             p = &tmp_ds.particle_set[tmp_id];
             p->pos = it.second.center_of_mass;
             p->vel = it.second.vel_com;

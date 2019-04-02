@@ -5,11 +5,6 @@ set(PROJECT_NAME plan)
 set(SOURCE_FILES  src/global.hpp src/global.cpp src/tree.hpp src/tree.cpp src/analyses.hpp src/analyses.cpp src/main.cpp)
 add_executable(plan ${SOURCE_FILES})
 
-cmake_host_system_information(RESULT myhostname QUERY HOSTNAME)
-if (${myhostname} STREQUAL "Rixins-MBP")
-    # include MacPorts directories in my own laptop
-    target_include_directories(${PROJECT_NAME} PUBLIC /opt/local/include /opt/local/include/gcc7 /opt/local/include/mpich-gcc7)
-endif ()
 ############################################################
 ## Other users may add irregular header search paths here ##
 ############################################################
@@ -63,6 +58,7 @@ endif ()
 
 if (TURN_ON_MPI)
     find_package(MPI REQUIRED)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${MPI_C_INCLUDE_DIRS})
     target_link_libraries(plan PUBLIC ${MPI_C_LIBRARIES})
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_C_LINK_FLAGS} -DMPICH_SKIP_MPICXX -DOMPI_SKIP_MPICXX")
 endif ()

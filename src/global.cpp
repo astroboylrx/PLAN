@@ -868,25 +868,6 @@ Timer::Timer()
     skip_time = 0;
 }
 
-/*! \fn double GetCurrentTime()
- *  \brief get current time */
-double Timer::GetCurrentTime()
-{
-#ifdef MPI_ON
-    return MPI_Wtime();
-#else // MPI_ON
-    //return double(clock())/CLOCKS_PER_SEC;
-    // clock() gives cpu time instead of wall-clock time
-
-    using namespace std::chrono;
-    auto now = system_clock::now();
-    auto now_ms = time_point_cast<milliseconds>(now);
-
-    auto value = now_ms.time_since_epoch();
-    return static_cast<double>(value.count())/1.0e3;
-#endif // MPI_ON
-}
-
 /*! \fn void StartTimer()
  *  \brief start the timer */
 void Timer::StartTimer()

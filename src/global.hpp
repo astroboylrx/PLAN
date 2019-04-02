@@ -642,6 +642,8 @@ operator / (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
     return tmp;
 }
 
+/*! \fn template<class T, class U, int D> bool SmallVecLessEq (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs)
+ *  \brief return true if every element in lhs is smaller than / equal to rhs  */
 template<class T, class U, int D>
 bool SmallVecLessEq (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
     bool val = true;
@@ -651,6 +653,8 @@ bool SmallVecLessEq (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
     return val;
 };
 
+/*! \fn template<class T, class U, int D> bool SmallVecGreatEq (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs)
+ *  \brief return true if every element in lhs is larger than / equal to rhs  */
 template<class T, class U, int D>
 bool SmallVecGreatEq (const SmallVec<T, D>& lhs, const SmallVec<U, D>& rhs) {
     bool val = true;
@@ -700,8 +704,21 @@ public:
 
     /*! \var double max_half_width
      *  \brief maximum half width of box
-     *  This is trick for building tree for non-cubic box. But later we can implement tree that use exact half width */
+     *  This is trick for building tree for non-cubic box. But later we may implement tree that use exact half width */
     double max_half_width {0.1};
+
+    /*! \var double max_particle_extent
+     *  \brief maximum distance between particles in one dimension
+     *  This is useful for constraining the half_width of the BHtree when particles only occupy a small region in the box */
+    double max_particle_extent {0.1};
+
+    /*! \var SmallVec<double, dim> particle_min {SmallVec<double, dim>(-0.1)}
+     *  \brief minimum coordinates reached by all the particles, default (-0.1, -0.1, -0.1) */
+    SmallVec<double, dim> particle_min {SmallVec<double, dim>(-0.1)};
+
+    /*! \var SmallVec<double, dim> particle_max {SmallVec<double, dim>(0.1)}
+     *  \brief maximum coordinates reached by all the particles, default (0.1, 0.1, 0.1) */
+    SmallVec<double, dim> particle_max {SmallVec<double, dim>(0.1)};
 
     /***** The following parameters need input information and/or derivation *****/
 
@@ -1271,10 +1288,6 @@ private:
      *  \brief if timer is resumed, [stop->resume] is skipped */
     double skip_time;
     
-    /*! \fn double GetCurrentTime()
-     *  \brief get current time */
-    double GetCurrentTime();
-    
     /*! \var double end_time
      *  \brief the time when we stop this timer */
     double stop_time;
@@ -1287,7 +1300,25 @@ public:
     /*! \fn Timer()
      *  \brief constructor */
     Timer();
-    
+
+/*! \fn double GetCurrentTime()
+ *  \brief get current time */
+    static double GetCurrentTime() {
+#ifdef MPI_ON
+        return MPI_Wtime();
+#else // MPI_ON
+        //return double(clock())/CLOCKS_PER_SEC;
+        // clock() gives cpu time instead of wall-clock time
+
+        using namespace std::chrono;
+        auto now = system_clock::now();
+        auto now_ms = time_point_cast<milliseconds>(now);
+
+        auto value = now_ms.time_since_epoch();
+        return static_cast<double>(value.count())/1.0e3;
+#endif // MPI_ON
+    }
+
     /*! \fn void StartTimer()
      *  \brief start the timer */
     void StartTimer();
