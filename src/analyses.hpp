@@ -28,7 +28,7 @@ void BasicAnalyses(DataSet<T, D> &ds, int loop_count)
     
     if (progIO->flags.density_vs_scale_flag) {
         progIO->numerical_parameters.max_ghost_zone_width = progIO->numerical_parameters.max_half_width;
-        ds.tree.max_leaf_size = std::pow(1<<D, 2);
+        ds.tree.max_leaf_size = std::pow(1U<<D, 2);
         progIO->flags.no_ghost_particle_flag = 1;
     }
 
@@ -293,7 +293,7 @@ void BasicAnalysesWithTree(DataSet<T, D> &ds, int loop_count)
                         }
                         // small radii need more sampling
                         if (i < 3) {
-                            for (int orthant = 0; orthant != 1<<D; orthant++) {
+                            for (int orthant = 0; orthant != 1U<<D; orthant++) {
                                 tmp_count = 0;
                                 subcenter = current_center + center_substep.ParaMultiply(Orthant<D>::orthants[orthant]);
                                 //ds.tree.RecursiveBallSearchCount(subcenter, ds.tree.root, search_radii[i], tmp_count);
@@ -302,7 +302,7 @@ void BasicAnalysesWithTree(DataSet<T, D> &ds, int loop_count)
                                     progIO->physical_quantities[loop_count].max_rhop_vs_scale[i] = tmp_count;
                                 }
                                 if (i == 0) { // the smallest radii needs most sampling
-                                    for (int suborthant = 0; suborthant != 1<<D; suborthant++) {
+                                    for (int suborthant = 0; suborthant != 1U<<D; suborthant++) {
                                         tmp_count = 0;
                                         subsubcenter = subcenter + center_subsubstep.ParaMultiply(Orthant<D>::orthants[orthant]);
                                         //ds.tree.RecursiveBallSearchCount(subsubcenter, ds.tree.root, search_radii[i], tmp_count);
@@ -370,6 +370,8 @@ void TempCalculation(DataSet<T, D> &ds, int loop_count)
 
     // RL: debug use, output particles by reading particle id from an external file
     /*
+    // RL: this only works for continuous particle id (from 0 to num_particles, contiguous number without break); if not all cpu have the same number of particles, this will fail!
+    // RL: also, when dealing with ParaView's "Save Data", the "vtkOriginalPointIds" is not particle id in PLAN; it is just the order when ParaView reads in particles (basically the line number-1 in POINT3D file); also note that the "vtkOriginalPointIds" will change after Extract Selection!
     std::ifstream close_b("./red.txt", std::ifstream::in);
     if (!close_b.is_open()) {
         std::cout << "Failed to open red.txt" << std::endl;

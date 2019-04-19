@@ -15,10 +15,10 @@
 /***** template specialization for Orthant *****/
 /***********************************************/
 
-/*! \var template <> const SmallVec<int, 3> Orthant<3>::orthants[1<<3]
+/*! \var template <> const SmallVec<int, 3> Orthant<3>::orthants[1U<<3]
  *  \brief constant orthants used under 3D */
 template <> // template specialization need template<>. (reference: http://en.cppreference.com/w/cpp/language/template_specialization )
-const SmallVec<int, 3> Orthant<3>::orthants[1<<3] = {
+const SmallVec<int, 3> Orthant<3>::orthants[1U<<3] = {
     {-1, -1, -1},
     { 1, -1, -1},
     {-1,  1, -1},
@@ -34,20 +34,20 @@ const SmallVec<int, 3> Orthant<3>::orthants[1<<3] = {
  * But if you inline it, putting into header files is fine. 
  */
 
-/*! \var template <> const SmallVec<int, 2> Orthant<2>::orthants[1<<2]
+/*! \var template <> const SmallVec<int, 2> Orthant<2>::orthants[1U<<2]
  *  \brief constant orthants used under 2D */
 template <>
-const SmallVec<int, 2> Orthant<2>::orthants[1<<2] = {
+const SmallVec<int, 2> Orthant<2>::orthants[1U<<2] = {
     {-1, -1},
     { 1, -1},
     {-1,  1},
     { 1,  1}
 };
 
-/*! \var template <> const SmallVec<int, 1> Orthant<1>::orthants[1<<1]
+/*! \var template <> const SmallVec<int, 1> Orthant<1>::orthants[1U<<1]
  *  \brief constant orthants used under 1D */
 template<>
-const SmallVec<int, 1> Orthant<1>::orthants[1<<1] = {
+const SmallVec<int, 1> Orthant<1>::orthants[1U<<1] = {
     -1, 1
 };
 
@@ -148,7 +148,7 @@ void BaseMortonKey::InitializeMortonConstants()
  *  \brief output the particle index and its key as octal digits */
 void BaseMortonKey::OutKey(std::ostream &stream, morton_key m_key)
 {
-    unsigned int pindex = static_cast<unsigned int>(m_key>>96);
+    auto pindex = static_cast<unsigned int>(m_key>>96);
     stream << "Particle index: " << std::setw(10) << pindex;
     
     stream << "; Morton Key (octal): ";

@@ -87,9 +87,18 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
         if (name == "something_not_a_number_but_a_string") {
             ; // store strings into specific variables
         } else {
-            size_t idx;
-            input_paras.emplace(name, std::stod(value, &idx));
-            // if insertion happens, then return_value.second is true
+            if (value.find('/') != std::string::npos) {
+                std::istringstream tmp_iss;
+                double v1, v2;
+                char c;
+                tmp_iss.str(value);
+                tmp_iss >> v1 >> c >> v2;
+                input_paras.emplace(name, v1/v2);
+            } else {
+                size_t idx;
+                input_paras.emplace(name, std::stod(value, &idx));
+                // if insertion happens, then return_value.second is true
+            }
         }
     }
 

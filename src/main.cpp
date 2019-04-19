@@ -64,7 +64,10 @@ int main(int argc, const char * argv[])
         progIO->Output(std::cout, progIO->out_content, __more_output, __all_processors);
 
         BasicAnalyses(ds, loop_count);
-        
+
+        if (progIO->flags.tmp_calculation_flag) {
+            TempCalculation<float, dim>(ds, loop_count);
+        }
         if (progIO->flags.find_clumps_flag || progIO->flags.density_vs_scale_flag) {
             ds.particle_set.MakeGhostParticles(progIO->numerical_parameters);
             ds.tree.BuildTree(progIO->numerical_parameters, ds.particle_set);
@@ -77,18 +80,11 @@ int main(int argc, const char * argv[])
 
             /***** Step III-C, test region --- perform more calculation or improve results *****/
             /* RL: test use
-            ds.planetesimal_list.SearchBinaryPlanetesimals<float>(loop_count);
-            for (auto it : ds.planetesimal_list.planetesimals) {
-                ds.planetesimal_list.FindSubClumpsInVelocitySpace(ds, it.first);
-            }
+            ;
             //*/
 
         }
 
-        if (progIO->flags.tmp_calculation_flag) {
-            TempCalculation<float, dim>(ds, loop_count);
-        }
-        
     }
 
     /********** Step IV: Post-loop Work **********/
