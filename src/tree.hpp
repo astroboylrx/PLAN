@@ -5006,6 +5006,38 @@ public:
                 }
                 //ath_density = MaxOf(ds.tree.particle_list[item].ath_density, ath_density);
             }
+
+            // perform angle correction based on J before calculating the offset
+            auto tmp_J = sn::dvec(it->second.J[0], it->second.J[1], it->second.J[2]);
+            double tmp_theta = std::acos(it->second.J[2] / tmp_J.Norm());
+            double tmp_phi = std::atan2(it->second.J[1], it->second.J[0]);
+
+            double rot_z[3][3] = {{std::cos(tmp_phi), -std::sin(tmp_phi), 0},
+                                  {std::sin(tmp_phi),  std::cos(tmp_phi), 0},
+                                  {                0,                  0, 1}};
+            double rot_y[3][3] = {{ std::cos(tmp_theta), 0, std::sin(tmp_theta)},
+                                  {                   0, 1,                   0},
+                                  {-std::sin(tmp_theta), 0, std::cos(tmp_theta)}};
+            double rot[3][3];
+            for (size_t d1 = 0; d1 < 3; d1++) {
+                for (size_t d2 = 0; d2 < 3; d2++) {
+                    rot[d1][d2] = 0;
+                    for (size_t d = 0; d < 3; d++) {
+                        rot[d1][d2] += rot_z[d1][d] * rot_y[d][d2];
+                    }
+                }
+            }
+
+            for (idx = 0; idx < tmp_num_particles; idx++) {
+                double tmp_offset[3] = {offset[0][idx], offset[1][idx], offset[2][idx]};
+                for (size_t d = 0; d < 3; d++) {
+                    offset[d][idx] = 0;
+                    for (size_t d1 = 0; d1 < 3; d1++) {
+                        offset[d][idx] += tmp_offset[d1] * rot[d1][d];
+                    }
+                }
+            }
+
             auto half_size_offset = tmp_num_particles / 2;
             bool is_even = !(tmp_num_particles & 1);
             for (size_t d = 0; d < 3; d++) {
