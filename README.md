@@ -1,5 +1,6 @@
 # PLAN
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1436807.svg)](https://doi.org/10.5281/zenodo.1436807)
+
+[![DOI](https://zenodo.org/badge/53685063.svg)](https://zenodo.org/badge/latestdoi/53685063)
 
 PLanetesimal ANalyzer (`PLAN`, Li et al. in prep) is designed to identify and further characterize the properties of planetesimals produced in the numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297), [Simon et al. 2016](https://doi.org/10.3847/0004-637X/822/1/55)).  `PLAN`  has already been used in the analyses of [Li et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), [Abod et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), and Nesvorný et al. (just accepted by Nature Astronomy). 
 
