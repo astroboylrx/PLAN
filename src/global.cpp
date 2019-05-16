@@ -224,6 +224,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"Verbose", no_argument, &flags.verbose_flag, 1},
         {"Combined", no_argument, &flags.combined_flag, 1},
         {"Find_Clumps", no_argument, &flags.find_clumps_flag, 1},
+        {"Save_Clumps", no_argument, &flags.save_clumps_flag, 1},
         {"No_Ghost", no_argument, &flags.no_ghost_particle_flag, 1},
         {"Basic_Analyses", no_argument, &flags.basic_analyses_flag, 1},
         {"Density_Vs_Scale", no_argument, &flags.density_vs_scale_flag, 1},
@@ -237,6 +238,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
         {"file_num", required_argument, nullptr, 'f'},
         {"out_file", required_argument, nullptr, 'o'},
         {"in_const", required_argument, nullptr, 't'},
+        {"sampling", required_argument, nullptr, 's'},
         {"xlim", required_argument, nullptr, 'x'},
         {"ylim", required_argument, nullptr, 'y'},
         {"zlim", required_argument, nullptr, 'z'},
@@ -258,7 +260,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
             int option_index = 0;
 #ifndef SMR_ON
             // remember add ":" after the letter means this option has argument after it
-            tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:x:y:z:h", long_options, &option_index);
+            tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:s:x:y:z:h", long_options, &option_index);
 #else // SMR_ON
             tmp_option = getopt_long(argc, (char *const *)argv, ":c:i:b:p:f:o:t:hl:d:", long_options, &option_index);
 #endif // SMR_ON
@@ -348,6 +350,23 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
                 case 't': {
                     file_name.input_const_path.assign(optarg);
                     log_info << "input_const_path is " << file_name.input_const_path << "\n";
+                    break;
+                }
+                case 's': {
+                    std::string tmp_str;
+                    tmp_str.assign(optarg);
+                    if (tmp_str.find('-') != std::string::npos) {
+                        error_message << "sub_sampling_rate should be positive. (Auto fix to 1)" << std::endl;
+                        Output(std::cerr, error_message, __normal_output, __master_only);
+                    } else {
+                        std::istringstream tmp_iss;
+                        tmp_iss.str(optarg);
+                        tmp_iss >> save_clump_sampling_rate;
+                        if (save_clump_sampling_rate == 0) {
+                            save_clump_sampling_rate = 1;
+                        }
+                    }
+                    log_info << "sub_sampling_rate for saving clumps to particle lists is 1 in every " << save_clump_sampling_rate << " particles\n";
                     break;
                 }
                 case 'x': {
@@ -513,7 +532,7 @@ int Basic_IO_Operations::Initialize(int argc, const char * argv[])
 void Basic_IO_Operations::PrintUsage(const char *program_name)
 {
     out_content << "USAGE: \n" << program_name
-    << " -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> -x -0.1,0.1 -y -0.05,0.05 --flags]\n"
+    << " -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> -s 10 -x -0.1,0.1 -y -0.05,0.05 --flags]\n"
     << "Example: ./plan -c 64 -i ./bin/ -b Par_Strat3d -p ds -f 170:227 -o result.txt -t plan_input.txt --Verbose --Find_Clumps\n"
     << "[...] means optional arguments. Available flags: \n"
     << "Use --Help to obtain this usage information\n"
@@ -521,6 +540,7 @@ void Basic_IO_Operations::PrintUsage(const char *program_name)
     << "Use --Debug to obtain all possible output during execution\n"
     << "Use --Combined to deal with combined lis files (from all processors)\n"
     << "Use --Find_Clumps to run clump finding functions\n"
+    << "Use --Save_Clumps to save all clumps to particle lists\n\t(use '-s N' to sub-sample (1 in N) the particle list for outputting to save storage)\n"
     << "Use --No_Ghost to skip making ghost particles\n"
     << "Use --Basic_Analyses to perform basic analyses, which will output max($\\rho_p$) and $H_p$\n"
     << "Use --Density_Vs_Scale to calculate max($\\rho_p$) as a function of length scales\n"

@@ -1356,7 +1356,7 @@ public:
         }
         
         num_total_particles = num_particles;
-        uint32_t tmp_num_particles_in_each_processor = num_total_particles / progIO->num_cpus;
+        //uint32_t tmp_num_particles_in_each_processor = num_total_particles / progIO->num_cpus;
         progIO->log_info << ", num_particles = " << num_particles << "; || ";
         
         AllocateSpace(num_particles);
@@ -1384,13 +1384,13 @@ public:
                 for (uint32_t i = 0; i != tmp_num_particles; i++) {
                     p = &particles[tmp_id];
                     std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
-                    for (int i = 0; i != D; i++) {
-                        p->pos[i] = static_cast<double>(tmp_float_vector[i]);
+                    for (int d = 0; d != D; d++) {
+                        p->pos[d] = static_cast<double>(tmp_float_vector[d]);
                     }
                     std::advance(tmp_char, D_float);
                     std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
-                    for (int i = 0; i != D; i++) {
-                        p->vel[i] = static_cast<double>(tmp_float_vector[i]);
+                    for (int d = 0; d != D; d++) {
+                        p->vel[d] = static_cast<double>(tmp_float_vector[d]);
                     }
                     std::advance(tmp_char, D_float);
                     std::memcpy((char*)&tmp_float_value, tmp_char, one_float);
@@ -1405,7 +1405,9 @@ public:
                     std::memcpy((char*)&tmp_int, tmp_char, one_int);
                     p->cpu_id = static_cast<uint16_t>(tmp_int);
                     std::advance(tmp_char, one_int);
-                    p->id = p->cpu_id * tmp_num_particles_in_each_processor + p->id_in_run;
+
+                    // RL: we do not use this id anymore, see reasons in ReadSingleLisFile
+                    //p->id = p->cpu_id * tmp_num_particles_in_each_processor + p->id_in_run;
 
                     // RL: previously, we didn't consider the particle ID in the simulations
                     // Fortunately, sampling in Athena only output the first XXX particles in each processor
@@ -1466,9 +1468,11 @@ public:
             progIO->log_info << ", num_particles = " << num_particles << "; || ";
             
             AllocateSpace(num_particles);
-            uint32_t tmp_num_particles_in_each_processor = num_particles / progIO->num_cpus;
+            //uint32_t max_particle_id_in_run = 0;
+            // RL: the old way has a poor support for simulations where not all cpus have particles, especially when some cpus have less particles than others (e.g., b/c their decomposed grid intersect with the designated region where Athena initializes particles)
+            //uint32_t tmp_num_particles_in_each_processor = num_particles / progIO->num_cpus;
             
-            // Thrid step, read particle data
+            // Third step, read particle data
             uint32_t tmp_id = 0; unsigned long tmp_long; unsigned int tmp_int;
             Particle<D> *p;
             size_t D_float = D * sizeof(float);
@@ -1484,13 +1488,13 @@ public:
             for (uint32_t i = 0; i != tmp_num_particles; i++) {
                 p = &particles[tmp_id];
                 std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
-                for (int i = 0; i != D; i++) {
-                    p->pos[i] = static_cast<double>(tmp_float_vector[i]);
+                for (int d = 0; d != D; d++) {
+                    p->pos[d] = static_cast<double>(tmp_float_vector[d]);
                 }
                 std::advance(tmp_char, D_float);
                 std::memcpy((char*)tmp_float_vector, tmp_char, D_float);
-                for (int i = 0; i != D; i++) {
-                    p->vel[i] = static_cast<double>(tmp_float_vector[i]);
+                for (int d = 0; d != D; d++) {
+                    p->vel[d] = static_cast<double>(tmp_float_vector[d]);
                 }
                 std::advance(tmp_char, D_float);
                 std::memcpy((char*)&tmp_float_value, tmp_char, one_float);
@@ -1505,7 +1509,12 @@ public:
                 std::memcpy((char*)&tmp_int, tmp_char, one_int);
                 p->cpu_id = static_cast<uint16_t>(tmp_int);
                 std::advance(tmp_char, one_int);
-                p->id = p->cpu_id * tmp_num_particles_in_each_processor + p->id_in_run;
+
+                // RL: in this way, we ensure all particles have their own unique id and this method works for tracking particles even if some particles are missing (e.g., out of the box). However, if only cpus with a large cpu_id have particles, we may run into a final particle id larger than 2^32. Thus, this method requires the unique id stored in a long variable. A low-risky workaround may be: counting the number of cpu_id's by setting 1 or 0 to an int array[num_cpus], and then giving an index number with an increasing order to those cpus that have particles initially (e.g., {0, 0, 1, 2, 0, 0, 3, 4, 0, 5, 0, 6, 7, 8}). The final unique id would be array[cpu_id] * max_particle_id_in_run. Still, this workaround does not guarantee id < 2^32.
+                //max_particle_id_in_run = std::max(max_particle_id_in_run, p->id_in_run);
+
+                // RL: using 'num_particles / num_cpus' cannot reflect the real and unique id under some special circumstances (see above, before the definition of 'tmp_num_particles_in_each_processor'
+                // p->id = p->cpu_id * tmp_num_particles_in_each_processor + p->id_in_run;
 
                 // RL: previously, we didn't consider the particle ID in the simulations
                 // Fortunately, sampling in Athena only output the first XXX particles in each processor
@@ -1539,9 +1548,16 @@ public:
                                 file_head + loop_count * progIO->num_cpus + progIO->num_cpus);
         }
 
+        // RL: given that we do not lose particles very often, we sort particles first by cpu_id and then by id_in_run. The resulting index is the unique id assigned to particles for the purpose of tracking particles along time.
         std::sort(particles, particles+num_particles, [](const Particle<D> &a, const Particle<D> &b) {
-            return a.id < b.id;
+            if (a.cpu_id == b.cpu_id) {
+                return a.id_in_run < b.id_in_run;
+            }
+            return a.cpu_id < b.cpu_id;
         });
+        for (uint32_t i = 0; i != num_particles; i++) {
+            particles[i].id = i;
+        }
         progIO->physical_quantities[loop_count].time = time;
         progIO->physical_quantities[loop_count].dt = dt;
 
@@ -3834,7 +3850,7 @@ public:
         int merge_happened_flag = 1;
         double max_radius = 0.;
         uint32_t *nearby_mask;
-        int merging_count = 0, delete_count = 0, predator_count = 0;
+        unsigned int merging_count = 0, delete_count = 0, predator_count = 0;
         using pl_iterator = decltype(ds.planetesimal_list.planetesimals.begin());
         std::vector<pl_iterator> nearby_pi;
         std::vector<std::pair<pl_iterator, pl_iterator>> merging_pairs;
@@ -4944,6 +4960,17 @@ public:
             progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
         }
 
+        std::stringstream tmp_ss_id;
+        if (progIO->flags.save_clumps_flag) {
+            char mkdir_cmd[500] = "mkdir -p ParList.";
+            tmp_ss_id << std::setw(4) << std::setfill('0') << loop_count * progIO->interval + progIO->start_num;
+            std::strcat(mkdir_cmd, tmp_ss_id.str().c_str());
+            if (std::system(mkdir_cmd) == -1) {
+                progIO->error_message << "Error: Failed to execute: " << mkdir_cmd << std::endl;
+                progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
+            }
+        }
+
         /* RL: old output with many diagnostic info
         file_planetesimals << std::setw(24) << "# center_of_mass[x]" << std::setw(24) << "center_of_mass[y]" << std::setw(24) << "center_of_mass[z]" << std::setw(10) << "peak_id" << std::setw(24) << "<-its_rho" << std::setw(10) << "Npar" << std::setw(24) << "total_mass" << std::setw(24) << "Hill_radius" << std::setw(24) << "max(dist2COM)" << std::setw(24) << "total_mass/volume_by_max_dist2COM" << std::endl;
         for (auto peak : peaks_and_masses) {
@@ -4988,23 +5015,35 @@ public:
             auto it = planetesimals.find(peak.first);
             auto tmp_num_particles = it->second.indices.size();
             sn::dvec geo_mean_offset, median_offset;
-            std::vector<std::vector<double>> offset;
-            offset.resize(3);
-            for (auto &item : offset) {
-                item.resize(tmp_num_particles);
-            }
             //double ath_density = 0, peak_density = ds.tree.particle_list[it->first].new_density;
-            uint32_t idx = 0;
             for (auto item : it->second.indices) {
-                for (size_t d = 0; d < 3; d++) {
-                    offset[d][idx] = ds.tree.particle_list[item].pos[d] - it->second.center_of_mass[d];
-                }
-                idx++;
                 auto tmp_it = ds.tree.sink_particle_indices.find(item);
                 if (tmp_it != ds.tree.sink_particle_indices.end()) {
                     tmp_num_particles += tmp_it->second.size()-1;
                 }
                 //ath_density = MaxOf(ds.tree.particle_list[item].ath_density, ath_density);
+            }
+            std::vector<std::vector<double>> offset;
+            offset.resize(3);
+            for (auto &item : offset) {
+                item.resize(tmp_num_particles);
+            }
+            uint32_t idx = 0;
+            for (auto item : it->second.indices) {
+                auto tmp_it = ds.tree.sink_particle_indices.find(item);
+                if (tmp_it != ds.tree.sink_particle_indices.end()) {
+                    for (auto &tmp_sink_it : tmp_it->second) {
+                        for (size_t d = 0; d < 3; d++) {
+                            offset[d][idx] = tmp_sink_it.pos[d] - it->second.center_of_mass[d];
+                        }
+                        idx++;
+                    }
+                } else {
+                    for (size_t d = 0; d < 3; d++) {
+                        offset[d][idx] = ds.tree.particle_list[item].pos[d] - it->second.center_of_mass[d];
+                    }
+                    idx++;
+                }
             }
 
             // perform angle correction based on J before calculating the offset
@@ -5041,9 +5080,14 @@ public:
             auto half_size_offset = tmp_num_particles / 2;
             bool is_even = !(tmp_num_particles & 1);
             for (size_t d = 0; d < 3; d++) {
-                auto extreme_offset = std::minmax_element(offset[d].begin(), offset[d].end());
-                geo_mean_offset[d] = std::sqrt(std::abs(*extreme_offset.first * *extreme_offset.second));
                 for (auto &item : offset[d]) item = std::abs(item);
+                geo_mean_offset[d] = std::pow(10.0, std::accumulate(offset[d].begin(), offset[d].end(), 0., [](const double &a, const double &b) {
+                    if (b < 1e-32) {
+                        return a - 32;
+                    } else {
+                        return a + std::log10(b);
+                    }
+                }) / tmp_num_particles);
                 std::nth_element(offset[d].begin(), offset[d].begin() + half_size_offset, offset[d].end());
                 median_offset[d] = offset[d][half_size_offset];
                 if (is_even) {
@@ -5058,6 +5102,10 @@ public:
             it->second.CalculateCumulativeAngularMomentum(ds.tree, it->first, cumulative_file);
             cumulative_file.close();
             //*/
+
+            if (progIO->flags.save_clumps_flag) {
+                OutputSinglePlanetesimal(std::string("ParList.")+tmp_ss_id.str()+std::string("/")+std::to_string(it->first)+std::string(".txt"), it->first, ds);
+            }
             file_planetesimals << std::setw(12) << it->first << std::setw(12) << tmp_num_particles
                                << std::setprecision(16)
                                << std::setw(24) << it->second.total_mass
@@ -5127,7 +5175,8 @@ public:
     /*! \fn template<class T> void OutputSinglePlanetesimal(std::string file_name, uint32_t peak_id, DataSet<T, D> &ds)
      *  \brief output all particles in one planetesimal */
     template<class T>
-    void OutputSinglePlanetesimal(const std::string &file_name, uint32_t peak_id, DataSet<T, D> &ds) {
+    void OutputSinglePlanetesimal(const std::string &file_name, uint32_t peak_id, DataSet<T, D> &ds, size_t precision=16) {
+        auto width = precision + 8;
         std::ofstream file_single_clump;
         auto search_it = planetesimals.find(peak_id);
         if (search_it != planetesimals.end()) {
@@ -5136,17 +5185,24 @@ public:
                 progIO->error_message << "Error: Failed to open file: " << file_name << ". But we proceed." << std::endl;
                 progIO->Output(std::cerr, progIO->error_message, __normal_output, __all_processors);
             }
+            uint32_t skip_for_sub_sampling = 0;
             for (auto it : search_it->second.particles) {
+                if (skip_for_sub_sampling > 0) {
+                    skip_for_sub_sampling--;
+                    continue;
+                } else {
+                    skip_for_sub_sampling = progIO->save_clump_sampling_rate - 1;
+                }
                 file_single_clump.unsetf(std::ios_base::floatfield);
-                file_single_clump << std::setw(16) << ds.tree.particle_list[it.first].original_id;
+                file_single_clump << std::setw(precision) << ds.tree.particle_list[it.first].original_id;
                 file_single_clump << std::scientific;
                 for (int i = 0; i != D; i++) {
-                    file_single_clump << std::setprecision(16) << std::setw(24) << ds.tree.particle_list[it.first].pos[i];
+                    file_single_clump << std::setprecision(precision) << std::setw(width) << ds.tree.particle_list[it.first].pos[i];
                 }
                 for (int i = 0; i != D; i++) {
-                    file_single_clump << std::setprecision(16) << std::setw(24) << ds.tree.particle_list[it.first].vel[i];
+                    file_single_clump << std::setprecision(precision) << std::setw(width) << ds.tree.particle_list[it.first].vel[i];
                 }
-                file_single_clump << std::setprecision(16) << std::setw(24) << ds.tree.particle_list[it.first].mass << std::endl;
+                file_single_clump << std::setprecision(precision) << std::setw(width) << ds.tree.particle_list[it.first].mass << std::endl;
             }
             file_single_clump.close();
         }

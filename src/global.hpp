@@ -1006,6 +1006,10 @@ public:
      *  \brief set this flag to find clumps & planetesimals */
     int find_clumps_flag {0};
 
+    /*! \var int save_clumps_flag
+     *  \brief set this flag to save the particle list of all clumps & planetesimals */
+    int save_clumps_flag {0};
+
     /*! \var int basic_analyses_flag
      *  \brief set this flag to perform basic data analysis */
     int basic_analyses_flag {0};
@@ -1080,6 +1084,10 @@ public:
     /*! \var int num_cpus
      *  \brief the number of processors used in simulation */
     int num_cpus;
+
+    /*! \var uint32_t save_clump_sampling_rate
+     *  \brief the sub-sampling rate used in e.g., OutputSinglePlanetesimal */
+    uint32_t save_clump_sampling_rate {1};
 
     /*! \var SmallVec<double, dim> user_box_min{0.0}, user_box_max{0.0};
      *  \brief the range of coordinates to explore */

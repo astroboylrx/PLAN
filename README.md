@@ -1,12 +1,18 @@
 # PLAN
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.1436807.svg)](https://doi.org/10.5281/zenodo.1436807)
 
-PLanetesimal ANalyzer (`PLAN`) is designed to identify and characterize planetesimals in numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297)). 
+PLanetesimal ANalyzer (`PLAN`, Li et al. in prep) is designed to identify and further characterize the properties of planetesimals produced in the numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297), [Simon et al. 2016](https://doi.org/10.3847/0004-637X/822/1/55)).  `PLAN`  has already been used in the analyses of [Li et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), [Abod et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), and Nesvorný et al. (just accepted by Nature Astronomy). 
 
-`PLAN` now works with two types of data: VTK (dumps of primitive variables in grids) and LIS (a list of individual particles). The latter one is used to build [Barnes-Hut tree](https://doi.org/10.1038/324446a0) from 3D particle data. `PLAN` then finds planetesimals with the [HOP](https://doi.org/10.1086/305535) method. Also, analyzing & manipulating grid-based data is supported by `PLAN`'s VTK module (utilizing Boost MultiDimensional Array Library)
+Currently, `PLAN` works with the 3D particle output of Athena and find gravitationally bound clumps robustly and efficiently.  `PLAN`, which is written in `C++` with `OpenMP/MPI`, is massively parallelized to analyze billions of particles and many snapshots simultaneously.  `PLAN` may be also used to analyze the grid data (VTK dumps of primitive variables in grids), which is supported by its VTK module (utilizing Boost MultiDimensional Array Library).
+
+## Demo
+
+The picture below is a snapshot of the solid surface density from one of our high-resolution shearing box simulations. Self-bound clumps have already formed from collapse in this snapshot. All of the clumps identified by PLAN are marked by white circles that illustrate their Hill spheres.
+
+![](Demo4Readme.jpg)
 
 ## Compile & Run
-CMake is needed to generate a Makefile and compile this program. Boost headers are also required. `PLAN` can be accelerated with MPI and OpenMP.
+CMake is needed to generate a Makefile and compile this program. Boost headers are also required. `PLAN` can be accelerated with `MPI` and `OpenMP`.
 
 You may just run `cmake` and `make` to build `PLAN`.
 
