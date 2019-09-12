@@ -2,9 +2,9 @@
 
 [![DOI](https://zenodo.org/badge/53685063.svg)](https://zenodo.org/badge/latestdoi/53685063)
 
-PLanetesimal ANalyzer (`PLAN`, Li et al. in prep) is designed to identify and further characterize the properties of planetesimals produced in the numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297), [Simon et al. 2016](https://doi.org/10.3847/0004-637X/822/1/55)).  `PLAN`  has already been used in the analyses of [Li et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), [Abod et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), and Nesvorný et al. (just accepted by Nature Astronomy). 
+PLanetesimal ANalyzer (`PLAN`, [Li et al. (2019)](https://arxiv.org/abs/1906.09261)) identifies and further characterizes the properties of planetesimals produced in the numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297), [Simon et al. 2016](https://doi.org/10.3847/0004-637X/822/1/55)).  `PLAN`  has already been used in the analyses of [Li et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), [Abod et al. (2018)](https://arxiv.org/abs/1810.10018), and [Nesvorný et al. (2019)](https://doi.org/10.1038/s41550-019-0806-z). 
 
-Currently, `PLAN` works with the 3D particle output of Athena and find gravitationally bound clumps robustly and efficiently.  `PLAN`, which is written in `C++` with `OpenMP/MPI`, is massively parallelized to analyze billions of particles and many snapshots simultaneously.  `PLAN` may be also used to analyze the grid data (VTK dumps of primitive variables in grids), which is supported by its VTK module (utilizing Boost MultiDimensional Array Library).
+Currently, `PLAN` works with the 3D particle output of Athena and find gravitationally bound clumps robustly and efficiently.  `PLAN`, which is written in `C++` with `OpenMP/MPI`, is massively parallelized to analyze billions of particles and many snapshots simultaneously.  `PLAN` may be also used to analyze the grid data (VTK dumps of primitive variables in grids) with the internal support of its VTK module (utilizing Boost MultiDimensional Array Library).
 
 ## Demo
 
@@ -135,7 +135,9 @@ CMakeCache.txt      CMakeFiles          Makefile            cmake_install.cmake 
 
 To clean CMake results and cache, just delete the `build` directory or its contents.
 
-Below shows a test run.
+---
+
+While analyzing real data, `PLAN` needs to calculate the mass of each particle as well as all the density thresholds, which requires extra parameter information beyond the particle data dumps.  Thus, `PLAN` usually takes an input file (see the example file in the `scripts` folder) that specifies the hydro-grid resolution, the dust-to-gas surface density ratio (or metallicity), and the relative strength of particle self-gravity (see Eq. 8 in [Li et al. (2019)](https://arxiv.org/abs/1906.09261)) used in simulations.  Below shows the output of an example run.
 
 ```shell
 ➜  build $ ./plan

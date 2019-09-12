@@ -1,0 +1,6 @@
+Nx1 = 128  # number of cells in X-direction in Athena simulation
+Nx2 = 128  # number of cells in Y-direction in Athena simulation
+Nx3 = 128  # number of cells in Z-direction in Athena simulation
+Z = 0.02  # the dust-to-gas surface density ratio (so-called metallicity)
+four_pi_G_par = 0.05  # the relative strength of the particle self-gravity (4 pi G rho_0 / Omega^2)
+num_threads = 8  # number of OpenMP threads
