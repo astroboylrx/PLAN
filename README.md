@@ -2,13 +2,13 @@
 
 [![DOI](https://zenodo.org/badge/53685063.svg)](https://zenodo.org/badge/latestdoi/53685063)
 
-PLanetesimal ANalyzer (`PLAN`, [Li et al. (2019)](https://arxiv.org/abs/1906.09261)) identifies and further characterizes the properties of planetesimals produced in the numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) and dust self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297), [Simon et al. 2016](https://doi.org/10.3847/0004-637X/822/1/55)).  `PLAN`  has already been used in the analyses of [Li et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), [Abod et al. (2018)](https://arxiv.org/abs/1810.10018), and [Nesvorný et al. (2019)](https://doi.org/10.1038/s41550-019-0806-z). 
+PLanetesimal ANalyzer (`PLAN`, [Li et al. (2019)](https://doi.org/10.3847/1538-4357/ab480d)) identifies and characterizes planetesimals produced in numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) that includes particle self-gravity with code [`ATHENA`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297), [Simon et al. 2016](https://doi.org/10.3847/0004-637X/822/1/55)).  `PLAN`  has already been used in the analyses of [Li et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), [Abod et al. (2018)](https://doi.org/10.3847/1538-4357/ab40a3), and [Nesvorný et al. (2019)](https://doi.org/10.1038/s41550-019-0806-z), and more studies in progress.
 
-Currently, `PLAN` works with the 3D particle output of Athena and find gravitationally bound clumps robustly and efficiently.  `PLAN`, which is written in `C++` with `OpenMP/MPI`, is massively parallelized to analyze billions of particles and many snapshots simultaneously.  `PLAN` may be also used to analyze the grid data (VTK dumps of primitive variables in grids) with the internal support of its VTK module (utilizing Boost MultiDimensional Array Library).
+Currently, `PLAN` works with the 3D particle output of `Athena` and find gravitationally bound clumps robustly and efficiently.  `PLAN` — written in `C++` with `OpenMP/MPI` — is massively parallelized to analyze billions of particles and many snapshots simultaneously.  `PLAN` may be also used to analyze the grid data (VTK dumps of primitive variables in grids) with the internal support of its VTK module (requiring Boost MultiDimensional Array Library).
 
 ## Demo
 
-The picture below is a snapshot of the solid surface density from one of our high-resolution shearing box simulations. Self-bound clumps have already formed from collapse in this snapshot. All of the clumps identified by PLAN are marked by white circles that illustrate their Hill spheres.
+The picture below is a snapshot of the solid surface density from one of our high-resolution shearing box simulations (of the coupled gas-dust system in a local patch of protoplanetary disks). Self-bound clumps have already formed from gravitationally collapse in this snapshot. All of the clumps identified by PLAN are marked by white circles that illustrate their Hill spheres.
 
 ![](Demo4Readme.jpg)
 
@@ -141,10 +141,10 @@ While analyzing real data, `PLAN` needs to calculate the mass of each particle a
 
 ```shell
 ➜  build $ ./plan
-Program begins now (local time: Mon Mar 26 02:29:20 2018).
+Program begins now (local time: Thu Oct 31 23:49:40 2019).
 *******************************************************************************
 USAGE:
-./plan -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> --flags]
+./plan -c <num_cpus> -i <data_dir> -b <basename> -p <postname>  -f <range(f1:f2)|range_step(f1:f2:step)> -o <output> [-t <input_file_for_constants> -s 10 -x -0.1,0.1 -y -0.05,0.05 --flags]
 Example: ./plan -c 64 -i ./bin/ -b Par_Strat3d -p ds -f 170:227 -o result.txt -t plan_input.txt --Verbose --Find_Clumps
 [...] means optional arguments. Available flags:
 Use --Help to obtain this usage information
@@ -152,23 +152,26 @@ Use --Verbose to obtain more output during execution
 Use --Debug to obtain all possible output during execution
 Use --Combined to deal with combined lis files (from all processors)
 Use --Find_Clumps to run clump finding functions
+Use --Save_Clumps to save all clumps to particle lists
+        (use '-s N' to sub-sample (1 in N) the particle list for outputting to save storage)
+Use --No_Ghost to skip making ghost particles
 Use --Basic_Analyses to perform basic analyses, which will output max($\rho_p$) and $H_p$
 Use --Density_Vs_Scale to calculate max($\rho_p$) as a function of length scales
 Use --Temp_Calculation to do temporary calculations in TempCalculation()
-If you do not specify any flags, then --Find_Clumps will be turned on automatically.
-➜  build $ mpirun -np 2 ./plan -c 64 -i ../data/ -b Par_Strat3d -p combined -f 214:215:1 -o ./result.txt
-Program begins now (local time: Mon Mar 26 02:18:10 2018).
+If you don't specify any flags, then --Find_Clumps will be turned on automatically.
+➜  build $ mpirun -np 2 ./plan -c 256 -i ../data/ -b Par_Strat3d -p combined -f 77:80:3 -o ./result.txt
+Program begins now (local time: Fri Nov  1 00:02:39 2019).
 *******************************************************************************
-Set the number of available threads for OpenMP to 8. This number can also be fixed manually by specifying "num_threads" in the parameter input file.
-Note that every processor in MPI will utilize such number of threads in its own node. It is recommendeded to use --map-by ppr:n:node in the Hybrid scheme.
+Set the number of available threads for OpenMP to 6. This number can also be fixed manually by specifying "num_threads" in the parameter input file. 
+Note that every processor in MPI will utilize such number of threads in its own node. It is recommendeded to use --map-by ppr:n:node in the Hybrid scheme. 
 For example, to obtain the best performance, if there are 16 cores per node, then
 	mpirun -np XX --map-by ppr:2:node:pe=8 ./your_program ...
 with num_threads=8 will initialize 2 processors in each node and each processor will utilize 8 threads in the OpenMP sections. In this way, the entire node is fully utilized.
-Processor 0: Finish clump finding for t = 215.001, found 12 clumps;  Mp_max = 0.000331565, Mp_tot = 0.00113912(56.805420%) in code units.
-Processor 1: Finish clump finding for t = 214.001, found 12 clumps;  Mp_max = 0.000367304, Mp_tot = 0.00115491(57.592773%) in code units.
-Max waiting time among all processors due to Barrier(): 8.5939e-05s.
+Processor 1: Finish clump finding for t = 38.5, found 286 clumps;  Mp_max = 4.59336e-05, Mp_tot = 0.00130005(51.864338%) in code units.
+Processor 0: Finish clump finding for t = 40, found 252 clumps;  Mp_max = 9.94499e-05, Mp_tot = 0.00157491(62.829971%) in code units.
+Max waiting time among all processors due to Barrier(): 4.6386e-05s.
 *******************************************************************************
-Program ends now (local time: Mon Mar 26 02:18:10 2018). Elapsed time: 1.880250e-01 seconds.
+Program ends now (local time: Fri Nov  1 00:03:05 2019). Elapsed time: 2.604206e+01 seconds.
 ```
 
 
