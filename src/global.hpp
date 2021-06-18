@@ -839,6 +839,14 @@ public:
      *  \brief resolution for finer Surface density map output */
     SmallVec<int, 2> FineSp_Nx {SmallVec<int, 2>(512)};
 
+    /*! \var double clump_diffuse_threshold
+     *  \brief the diffuse threshold for a particle group; input for IsPositionDispersion2Large() */
+    double clump_diffuse_threshold {-1.0};
+
+    /*! \var double Hill_fraction_for_merge
+     *  \brief the fraction of Hill radius used when further merging primitive clumps */
+    double Hill_fraction_for_merge {-1.0};
+
     /*! \var double min_trusted_mass_code_unit
      *  \brief the minimum mass of a clump/peak to OUTPUT, determined by R_Hill = cell_length
      *  The Hill Radius is defined as R_Hill^3 = G Mass / (3 * Omega^2), where G = four_PI_G / four_PI.

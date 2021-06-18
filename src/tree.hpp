@@ -1758,10 +1758,17 @@ public:
     double** MakeFinerSurfaceDensityMap(const unsigned int Nx, const unsigned int Ny) {
         double **Sigma_ghost = nullptr;
         // clang gives error: variable-sized object may not be initialized
-        double tmp_Sigma[Ny+4][Nx+4]; // = {0.0}; // 1 more cell each side as ghost zones
+        //double tmp_Sigma[Ny+4][Nx+4]; // = {0.0}; // 1 more cell each side as ghost zones
         double ccx[Nx+4], ccy[Ny+4], tmp, idx_origin, idy_origin; // cell-center-x/y
         double dx, dy, inv_dx, inv_dy, dx2, dy2, half_dx, half_dy, three_half_dx, three_half_dy;
         std::vector<double> sigma_per_particle;
+
+        double **tmp_Sigma = new double *[Ny+4];
+        tmp_Sigma[0] = new double[(Ny+4) * (Nx+4)];
+        std::fill(tmp_Sigma[0], tmp_Sigma[0] + (Ny+4) * (Nx+4), 0.0);
+        for (size_t i = 1; i != Ny+4; i++) {
+            tmp_Sigma[i] = tmp_Sigma[i - 1] + Nx+4;
+        }
 
         if (progIO->flags.user_defined_box_flag) {
             dx = (progIO->user_box_max[0] - progIO->user_box_min[0]) / Nx;
@@ -3641,6 +3648,12 @@ public:
         } else if (hydro_res_per_H <= 2048) {
             ds.planetesimal_list.clump_diffuse_threshold = 0.5;
             ds.planetesimal_list.Hill_fraction_for_merge = 0.35;
+        }
+        if (progIO->numerical_parameters.clump_diffuse_threshold > 0) {
+            ds.planetesimal_list.clump_diffuse_threshold = progIO->numerical_parameters.clump_diffuse_threshold;
+        }
+        if (progIO->numerical_parameters.Hill_fraction_for_merge > 0) {
+            ds.planetesimal_list.Hill_fraction_for_merge = progIO->numerical_parameters.Hill_fraction_for_merge;
         }
         // and we are looking for clumps with certain mass_crit & peak_rho_crit
         ds.planetesimal_list.clump_mass_threshold = progIO->numerical_parameters.min_trusted_mass_code_unit;

@@ -72,6 +72,10 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
         if (input_str_line[0] == '<') {
             continue;
         }
+        // ignore empty lines
+        if (input_str_line.length() == 0) {
+            continue;
+        }
 
         // remove tailing comments
         size_t pos = input_str_line.find_first_of('#');
@@ -190,6 +194,24 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
     if (search != input_paras.end()) {
         FineSp_Nx[1] = static_cast<int>(search->second);
         progIO->log_info << FineSp_Nx[1] << "];" << std::endl;
+    }
+    search = input_paras.find("clump_diffuse_threshold");
+    if (search != input_paras.end()) {
+        clump_diffuse_threshold = search->second;
+        progIO->log_info << "clump_diffuse_threshold = " << clump_diffuse_threshold << ";" << std::endl;
+    }
+    if (clump_diffuse_threshold < 0) {
+        progIO->error_message << "clump_diffuse_threshold must be larger than 0" << std::endl;
+        exit(4); // wrong function argument
+    }
+    search = input_paras.find("Hill_fraction_for_merge");
+    if (search != input_paras.end()) {
+        Hill_fraction_for_merge = search->second;
+        progIO->log_info << "Hill_fraction_for_merge = " << Hill_fraction_for_merge << ";" << std::endl;
+    }
+    if (Hill_fraction_for_merge < 0) {
+        progIO->error_message << "Hill_fraction_for_merge must be larger than 0" << std::endl;
+        exit(4); // wrong function argument
     }
 
     CalculateNewParameters();
