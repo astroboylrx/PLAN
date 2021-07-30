@@ -1,6 +1,8 @@
 # PLAN
 
-[![DOI](https://zenodo.org/badge/53685063.svg)](https://zenodo.org/badge/latestdoi/53685063)
+[![ASCL](https://img.shields.io/static/v1?label=ASCL&message=1911.001&color=brightgreen&link=https://ascl.net/1911.001)](https://ascl.net/1911.001)
+[![ADS](https://img.shields.io/static/v1?label=ADS&message=MethodPaper&color=blue&link=https://ui.adsabs.harvard.edu/abs/2019ApJ...885...69L/abstract)](https://ui.adsabs.harvard.edu/abs/2019ApJ...885...69L/abstract)
+[![Zenodo](https://zenodo.org/badge/53685063.svg)](https://zenodo.org/badge/latestdoi/53685063)
 
 PLanetesimal ANalyzer (`PLAN`, [Li et al. (2019)](https://doi.org/10.3847/1538-4357/ab480d)) identifies and characterizes planetesimals produced in numerical simulations of the Streaming Instability ([Youdin & Goodman 2005](https://doi.org/10.1086/426895)) that includes particle self-gravity with code [`Athena`](https://github.com/PrincetonUniversity/Athena-Cversion) ([Stone et al. 2008](https://doi.org/10.1086/588755), [Bai & Stone 2010](https://doi.org/10.1088/0067-0049/190/2/297), [Simon et al. 2016](https://doi.org/10.3847/0004-637X/822/1/55)).  `PLAN`  has already been used in the analyses of [Li et al. (2018)](https://doi.org/10.3847/1538-4357/aaca99), [Abod et al. (2018)](https://doi.org/10.3847/1538-4357/ab40a3), and [Nesvorný et al. (2019)](https://doi.org/10.1038/s41550-019-0806-z) (featured on the [cover](https://www.nature.com/natastron/volumes/3/issues/9) of *Nature Astronomy*), and more studies in progress.
 
