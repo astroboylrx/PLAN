@@ -2090,8 +2090,8 @@ public:
                      << ", level= 0, domain= 0" << std::endl;
             file_vtk << "BINARY\nDATASET STRUCTURED_POINTS\nDIMENSIONS " << std::fixed << Nx + 1
                      << " " << Ny + 1 << " " << Nz + 1 << std::endl;
-            file_vtk << "ORIGIN" << std::scientific << std::setprecision(6) << std::setw(14) << paras.box_center[0]
-                     << std::setw(14) << paras.box_center[1] << std::setw(14) << paras.box_center[2] << std::endl;
+            file_vtk << "ORIGIN" << std::scientific << std::setprecision(6) << std::setw(14) << paras.box_min[0]
+                     << std::setw(14) << paras.box_min[1] << std::setw(14) << paras.box_min[2] << std::endl;
             file_vtk << "SPACING" << std::scientific << std::setprecision(6) << std::setw(13) << paras.cell_length[0]
                      << std::setw(13) << paras.cell_length[1] << std::setw(13) << paras.cell_length[2] << std::endl;
             file_vtk << "CELL_DATA " << std::fixed << Nx * Ny * Nz << std::endl;
