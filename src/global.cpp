@@ -64,16 +64,17 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
     std::string input_str_line;
     while (input_const_file && std::getline(input_const_file, input_str_line)) {
 
+        // ignore empty lines
+        if (input_str_line.length() == 0) {
+            continue;
+        }
+
         // ignore comments
         if (input_str_line[0] == '#') {
             continue;
         }
         // ignore Athena input file's block in case 'copy-and-paste'
         if (input_str_line[0] == '<') {
-            continue;
-        }
-        // ignore empty lines
-        if (input_str_line.length() == 0) {
             continue;
         }
 
@@ -198,20 +199,23 @@ void NumericalParameters::ReadNumericalParameters(std::string filename)
     search = input_paras.find("clump_diffuse_threshold");
     if (search != input_paras.end()) {
         clump_diffuse_threshold = search->second;
-        progIO->log_info << "clump_diffuse_threshold = " << clump_diffuse_threshold << ";" << std::endl;
+        if (clump_diffuse_threshold < 0) {
+            progIO->error_message << "the input clump_diffuse_threshold must be larger than 0" << std::endl;
+            exit(4); // wrong function argument
+        } else {
+            progIO->log_info << "clump_diffuse_threshold = " << clump_diffuse_threshold << ";" << std::endl;
+        }
     }
-    if (clump_diffuse_threshold < 0) {
-        progIO->error_message << "clump_diffuse_threshold must be larger than 0" << std::endl;
-        exit(4); // wrong function argument
-    }
+
     search = input_paras.find("Hill_fraction_for_merge");
     if (search != input_paras.end()) {
         Hill_fraction_for_merge = search->second;
-        progIO->log_info << "Hill_fraction_for_merge = " << Hill_fraction_for_merge << ";" << std::endl;
-    }
-    if (Hill_fraction_for_merge < 0) {
-        progIO->error_message << "Hill_fraction_for_merge must be larger than 0" << std::endl;
-        exit(4); // wrong function argument
+        if (Hill_fraction_for_merge < 0) {
+            progIO->error_message << "the input Hill_fraction_for_merge must be larger than 0" << std::endl;
+            exit(4); // wrong function argument
+        } else {
+            progIO->log_info << "Hill_fraction_for_merge = " << Hill_fraction_for_merge << ";" << std::endl;
+        }
     }
 
     CalculateNewParameters();
